@@ -228,17 +228,31 @@ function create() {
 
     // Non-blocking parallel sync
     (async () => {
-        try {
-            await fetchCatalog();
-            await fetchState();
-            console.log("Phaser: Initial sync complete.");
-        } catch (e) {
-            console.error("Phaser: Sync error:", e);
-        } finally {
-            // Always hide loading after trying
-            setTimeout(hideLoading, 1000);
-        }
-    })();
+    try {
+        await fetchCatalog();
+    } catch (e) {
+        console.warn("Falha no catálogo, usando fallback local");
+    }
+
+    try {
+        await fetchState();
+    } catch (e) {
+        console.warn("Falha no estado, usando fallback local");
+
+        // 🔥 fallback manual (IMPORTANTE)
+        lastState = {
+            farm: {
+                soil: {},
+                plantedCrops: {},
+                lands: []
+            }
+        };
+    }
+
+    console.log("Phaser: Initial sync complete (com fallback se necessário)");
+
+    setTimeout(hideLoading, 1000);
+})();
 
     // Safety timeout: 10 seconds is too long, world should show anyway
     setTimeout(hideLoading, 5000);
