@@ -1,0 +1,15 @@
+{
+  "name": "jogo-farm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "canvas": "^3.2.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

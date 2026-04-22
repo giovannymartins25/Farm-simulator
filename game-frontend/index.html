@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fazenda Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+</head>
+
+<body>
+    <div id="game-container">
+        <div id="loading-screen">
+            <div class="loader-content">
+                <div class="loader-tractor">TR</div>
+                <div class="loader-text">Carregando Fazenda...</div>
+                <div class="loader-sub">Sincronizando com a API</div>
+            </div>
+        </div>
+
+        <div id="hud">
+            <h2>Fazenda</h2>
+            <div class="hud-line">Dinheiro <span id="ui-money">0</span> | Mercado $<span id="ui-price">0</span>/und | Clima <span id="ui-weather">N/A</span></div>
+            <div class="hud-line">Casa <span id="ui-depot">0</span> | Silo <span id="ui-silo">0</span></div>
+            <div class="hud-line">Plantadeira <span id="ui-seeder">0/20</span> | Colheitadeira <span id="ui-harvester">0/50</span></div>
+            <div class="hud-line">Caminhao <span id="ui-truck">0/30</span> | Dia <span id="ui-time">0</span> | <span id="ui-hour">00</span>h</div>
+            <div class="hud-line" id="ui-gear"></div>
+            <div class="hud-line" id="ui-status"></div>
+        </div>
+
+        <div id="hud-toast" aria-live="polite"></div>
+
+        <div id="dashboard">
+            <div class="dash-row">
+                <div class="dash-speed-group">
+                    <span class="dash-speed" id="dash-speed">0</span>
+                    <span class="dash-unit">km/h</span>
+                </div>
+                <div class="dash-gear" id="dash-gear">1</div>
+            </div>
+
+            <div class="dash-rpm-container">
+                <div id="dash-rpm-bar" class="dash-rpm-bar"></div>
+            </div>
+
+            <div class="dash-status">
+                <div class="status-lamp" data-type="engine" id="lamp-engine" title="Motor Ligado"></div>
+                <div class="status-lamp" data-type="brake" id="lamp-brake" title="Freio / Espaco"></div>
+                <div class="status-lamp" data-type="stall" id="lamp-stall" title="Motor Morreu"></div>
+                <div class="dash-fuel" title="Combustivel (L)">Fuel <span id="dash-fuel-text">0 L</span></div>
+            </div>
+        </div>
+
+        <div id="minimap">
+            <canvas id="minimap-canvas" width="200" height="200"></canvas>
+        </div>
+
+        <div id="instructions">
+            F -> entrar/sair | E -> acoplar implemento | C -> ligar/desligar motor | O -> abastecer no posto<br>
+            L -> ligar/desligar implemento/plataforma | SHIFT -> embreagem | R/V -> marcha +/- | M -> mapa completo<br>
+            G -> auto shift on/off (veiculos automaticos) | H -> AUTO DRIVE | WASD -> mover | SPACE -> freio | Q -> interagir
+        </div>
+
+        <div id="shop-modal">
+            <div id="shop-inner">
+                <div class="shop-header">
+                    <h2>Loja da Fazenda</h2>
+                    <button class="shop-close" onclick="closeShop()">X</button>
+                </div>
+                <div class="shop-tabs">
+                    <button class="shop-tab active" id="tab-vehicles" onclick="switchTab('vehicles')">Veiculos</button>
+                    <button class="shop-tab" id="tab-implements" onclick="switchTab('implements')">Implementos</button>
+                    <button class="shop-tab" id="tab-seeds" onclick="switchTab('seeds')">Sementes</button>
+                    <button class="shop-tab" id="tab-lands" onclick="switchTab('lands')">Terras</button>
+                </div>
+                <div id="shop-content"></div>
+            </div>
+        </div>
+
+        <div id="sell-modal">
+            <div id="sell-inner">
+                <div class="shop-header">
+                    <h2>Venda de Equipamentos</h2>
+                    <button class="shop-close" onclick="closeSellMenu()">X</button>
+                </div>
+                <div class="shop-tabs">
+                    <button class="shop-tab active" onclick="renderSellMenu('vehicles')">Veiculos</button>
+                    <button class="shop-tab" onclick="renderSellMenu('implements')">Implementos</button>
+                </div>
+                <div id="sell-content"></div>
+            </div>
+        </div>
+
+        <div id="map-modal">
+            <div id="map-inner">
+                <div class="shop-header">
+                    <h2>Mapa Completo</h2>
+                    <button class="shop-close" onclick="toggleFullMap()">X</button>
+                </div>
+                <canvas id="world-map-canvas" width="900" height="620"></canvas>
+            </div>
+        </div>
+    </div>
+
+        <div id="field-monitor">
+            <div class="monitor-header">
+                <div class="monitor-brand">FIELD COMMAND v3.0</div>
+                <div id="monitor-auto-indicator" class="monitor-indicator">AUTO OFF</div>
+            </div>
+            
+            <div class="monitor-dual-layout">
+                <!-- LOCAL MONITOR (Lado Esquerdo) -->
+                <div id="monitor-local" class="monitor-half">
+                    <div class="global-header" style="color: #38bdf8; border-bottom-color: rgba(56, 189, 248, 0.2);">CAMPO ATUAL</div>
+                    
+                    <div id="mon-local-waiting" style="text-align:center; padding:30px 10px; color:#64748b; font-size:12px; border:1px dashed #334155; border-radius:8px; margin-bottom:10px;">
+                        Aguardando terreno...
+                    </div>
+
+                    <div id="mon-local-active" style="display:none; flex-direction:column; gap:10px;">
+                        <canvas id="field-monitor-canvas" width="220" height="150" style="background:#8B4513; border:1px solid #1e293b; border-radius:6px; align-self:center;"></canvas>
+                        
+                        <div class="monitor-grid" style="grid-template-columns: 1fr; gap:6px;">
+                            <div class="m-cell" style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px;">
+                                <div class="m-cell-label" style="margin:0; font-size:11px;">OPERAÇÃO</div>
+                                <div class="m-cell-val" id="mon-op" style="color:#38bdf8; font-size:12px; font-weight:bold;">PARADO</div>
+                            </div>
+                            <div class="m-cell" style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px;">
+                                <div class="m-cell-label" style="margin:0; font-size:11px;">PROGRESSO</div>
+                                <div class="m-cell-val" id="mon-perc" style="font-size:12px; font-weight:bold;">0%</div>
+                            </div>
+                            <div class="m-cell" style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px;">
+                                <div class="m-cell-label" style="margin:0; font-size:11px;">ÁREA TRABALHADA</div>
+                                <div class="m-cell-val" id="mon-area" style="font-size:12px; font-weight:bold;">0 tiles</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="monitor-divider-vertical"></div>
+
+                <!-- GLOBAL MONITOR (Lado Direito) -->
+                <div id="monitor-global" class="monitor-half">
+                    <div class="global-header">VISÃO GLOBAL</div>
+                    <canvas id="global-monitor-canvas" width="210" height="140" style="background:#1e293b; border:1px solid #334155; border-radius:6px; align-self:center; margin-bottom:10px;"></canvas>
+                    <div id="global-lands-list" class="global-list-container"></div>
+                </div>
+            </div>
+        </div>
+
+    <script src="main.js"></script>
+</body>
+
+</html>
