@@ -227,7 +227,7 @@ function create() {
     console.log("Phaser: Create finished. Starting API sync...");
 
     // Non-blocking parallel sync
-    (async () => {
+(async () => {
     try {
         await fetchCatalog();
     } catch (e) {
@@ -239,7 +239,7 @@ function create() {
     } catch (e) {
         console.warn("Falha no estado, usando fallback local");
 
-        // 🔥 fallback manual (IMPORTANTE)
+        // fallback manual
         lastState = {
             farm: {
                 soil: {},
@@ -249,7 +249,7 @@ function create() {
         };
     }
 
-    console.log("Phaser: Initial sync complete (com fallback se necessário)");
+    console.log("Phaser: Initial sync complete (com fallback)");
 
     setTimeout(hideLoading, 1000);
 })();
@@ -2538,7 +2538,7 @@ async function doContextAction() {
     if (near(ent, SHOP_POS, 100)) { openShop(); return; }
     // Harvester + silo
     if (isInHarvester() && near(ent, SILO_POS, 80)) {
-        try { const r = await fetch(`${API}/action/unload`, { method: 'POST' }); const d = await r.json(); if (d.success) fetchState(); } catch (e) { } return;
+        try { const r = await fetch(`${API}/action/unload`, { method: 'POST' }); const d = await r.json(); if (d.success) fetch("http://..."); } catch (e) { } return;
     }
     // Truck + silo
     if (isInTruck() && near(ent, SILO_POS, 80)) {
