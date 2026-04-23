@@ -12,12 +12,474 @@ const config = {
 const game = new Phaser.Game(config);
 
 const TILE = 32;
-let API = `http://${window.location.hostname}:3000`;
-// Fallback to localhost if hostname is 127.0.0.1 or similar
-if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
-    API = 'http://localhost:3000';
-}
+const IS_LOCALHOST = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+const API = IS_LOCALHOST ? 'http://localhost:3000' : '';
+const LOCAL_CATALOG = {
+    vehicles: {
+        tractor_mf275: { name: 'MF 275', brand: 'Massey Ferguson', type: 'tractor', hp: 50, speed: 5, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.12, friction: 0.965, turnSpeedBase: 0.12, fuelCapacity: 50, price: 0 },
+        tractor_valtra: { name: 'A850', brand: 'Valtra', type: 'tractor', hp: 85, speed: 6, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.15, friction: 0.970, turnSpeedBase: 0.11, fuelCapacity: 80, price: 800 },
+        tractor_nh: { name: 'T6.110', brand: 'New Holland', type: 'tractor', hp: 120, speed: 7, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.19, friction: 0.975, turnSpeedBase: 0.09, fuelCapacity: 120, price: 1800 },
+        tractor_jd: { name: 'JD 6130J', brand: 'John Deere', type: 'tractor', hp: 150, speed: 8, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.23, friction: 0.980, turnSpeedBase: 0.08, fuelCapacity: 150, price: 3000 },
+        tractor_case: { name: 'Magnum 310', brand: 'Case IH', type: 'tractor', hp: 220, speed: 9, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.28, friction: 0.985, turnSpeedBase: 0.07, fuelCapacity: 220, price: 5000 },
+        harvester_mf5650: { name: 'MF 5650', brand: 'Massey Ferguson', type: 'harvester', hp: 60, capacity: 50, speed: 4, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.10, friction: 0.960, turnSpeedBase: 0.06, fuelCapacity: 100, price: 0 },
+        harvester_nh: { name: 'TC5090', brand: 'New Holland', type: 'harvester', hp: 100, capacity: 120, speed: 5, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.13, friction: 0.965, turnSpeedBase: 0.05, fuelCapacity: 200, price: 2000 },
+        harvester_jd: { name: 'S680', brand: 'John Deere', type: 'harvester', hp: 120, capacity: 250, speed: 6, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.16, friction: 0.970, turnSpeedBase: 0.04, fuelCapacity: 350, price: 4500 },
+        truck_vw: { name: 'Constellation', brand: 'Volkswagen', type: 'truck', hp: 120, capacity: 30, speed: 7, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.18, friction: 0.975, turnSpeedBase: 0.05, fuelCapacity: 150, price: 0 },
+        truck_mb: { name: 'Atego 2430', brand: 'Mercedes-Benz', type: 'truck', hp: 160, capacity: 80, speed: 8, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.22, friction: 0.980, turnSpeedBase: 0.04, fuelCapacity: 250, price: 1500 },
+        truck_scania: { name: 'R450', brand: 'Scania', type: 'truck', hp: 200, capacity: 150, speed: 9, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.26, friction: 0.985, turnSpeedBase: 0.04, fuelCapacity: 400, price: 3000 }
+    },
+    implements: {
+        plow_small: { name: 'Tombador Pequeno', type: 'plow', requiredHp: 30, width: 1, price: 0 },
+        plow_medium: { name: 'Tombador Medio', type: 'plow', requiredHp: 80, width: 2, price: 300 },
+        plow_large: { name: 'Tombador Grande', type: 'plow', requiredHp: 150, width: 3, price: 700 },
+        harrow_small: { name: 'Gradao 4 Linhas', type: 'harrow', requiredHp: 30, width: 1, lines: 4, price: 0 },
+        harrow_medium: { name: 'Gradao 8 Linhas', type: 'harrow', requiredHp: 80, width: 2, lines: 8, price: 400 },
+        harrow_large: { name: 'Gradao 12 Linhas', type: 'harrow', requiredHp: 150, width: 3, lines: 12, price: 800 },
+        seeder_small: { name: 'Plantadeira Pequena', type: 'seeder', requiredHp: 30, width: 1, capacity: 20, price: 0 },
+        seeder_medium: { name: 'Plantadeira Media', type: 'seeder', requiredHp: 80, width: 2, capacity: 50, price: 450 },
+        seeder_large: { name: 'Plantadeira Grande', type: 'seeder', requiredHp: 150, width: 3, capacity: 100, price: 900 }
+    },
+    seeds: {
+        seed_10: { name: '10 Sementes', amount: 10, price: 30 },
+        seed_25: { name: '25 Sementes', amount: 25, price: 65 },
+        seed_50: { name: '50 Sementes', amount: 50, price: 110 }
+    },
+    lands: {
+        field_1: { name: 'Vale Esmeralda', x: 5000, y: 6000, w: 1000, h: 800, price: 0 },
+        field_2: { name: 'Colinas do Sol', x: 6200, y: 6000, w: 1200, h: 800, price: 15000 },
+        field_3: { name: 'Planicie Alta', x: 5000, y: 7000, w: 1000, h: 1000, price: 20000 },
+        field_4: { name: 'Campos do Rio', x: 6200, y: 7000, w: 1500, h: 1000, price: 35000 },
+        field_5: { name: 'Latifundio', x: 5000, y: 8200, w: 2500, h: 1200, price: 80000 }
+    }
+};
+let localState = null;
+let localCounters = { vehicle: 4, implement: 4 };
+let localSunStreak = 0;
+let localFallbackLogged = false;
 const W = 10000, H = 10000;
+
+function deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
+
+function createDefaultLocalState() {
+    return {
+        time: 0,
+        weather: 'Ensolarado',
+        economy: { pricePerCrop: 10, totalMarketDemand: 50 },
+        farm: {
+            money: 999999,
+            seedDepot: 0,
+            harvestedCrops: 0,
+            harvesterStorage: 0,
+            harvesterCapacity: 50,
+            truckStorage: 0,
+            truckCapacity: 30,
+            truckCargoType: null,
+            seederStorage: 0,
+            seederCapacity: 20,
+            soil: {},
+            plantedCrops: [],
+            inventory: {
+                vehicles: [
+                    { id: 'veh_1', modelId: 'tractor_mf275', isOn: false, fuel: 50 },
+                    { id: 'veh_2', modelId: 'harvester_mf5650', isOn: false, fuel: 100 },
+                    { id: 'veh_3', modelId: 'truck_vw', isOn: false, fuel: 150 }
+                ],
+                implements: [
+                    { id: 'imp_1', modelId: 'plow_small', isOn: false },
+                    { id: 'imp_2', modelId: 'harrow_small', isOn: false },
+                    { id: 'imp_3', modelId: 'seeder_small', isOn: false }
+                ]
+            },
+            unlockedLands: ['field_1']
+        }
+    };
+}
+
+function ensureLocalState() {
+    if (!localState) {
+        localState = createDefaultLocalState();
+    }
+    normalizeState(localState);
+    return localState;
+}
+
+function normalizeState(state) {
+    if (!state.farm) state.farm = {};
+    if (!state.farm.inventory) state.farm.inventory = {};
+    if (!Array.isArray(state.farm.inventory.vehicles)) state.farm.inventory.vehicles = [];
+    if (!Array.isArray(state.farm.inventory.implements)) state.farm.inventory.implements = [];
+    if (!state.farm.soil) state.farm.soil = {};
+    if (!Array.isArray(state.farm.plantedCrops)) state.farm.plantedCrops = [];
+    if (!Array.isArray(state.farm.unlockedLands)) state.farm.unlockedLands = ['field_1'];
+    state.economy = state.economy || { pricePerCrop: 10, totalMarketDemand: 50 };
+    state.weather = state.weather || 'Ensolarado';
+    state.time = state.time || 0;
+    state.farm.money ??= 0;
+    state.farm.seedDepot ??= 0;
+    state.farm.harvestedCrops ??= 0;
+    state.farm.harvesterStorage ??= 0;
+    state.farm.truckStorage ??= 0;
+    state.farm.truckCargoType ??= null;
+    state.farm.seederStorage ??= 0;
+    state.farm.harvesterCapacity = getLocalHarvesterCapacity(state);
+    state.farm.truckCapacity = getLocalTruckCapacity(state);
+    state.farm.seederCapacity = getLocalSeederCapacity(state);
+    return state;
+}
+
+function getLocalHarvesterCapacity(state) {
+    const harvesters = state.farm.inventory.vehicles.filter(v => LOCAL_CATALOG.vehicles[v.modelId]?.type === 'harvester');
+    if (!harvesters.length) return 50;
+    return Math.max(...harvesters.map(v => LOCAL_CATALOG.vehicles[v.modelId].capacity || 50));
+}
+
+function getLocalTruckCapacity(state) {
+    const trucks = state.farm.inventory.vehicles.filter(v => LOCAL_CATALOG.vehicles[v.modelId]?.type === 'truck');
+    if (!trucks.length) return 30;
+    return Math.max(...trucks.map(v => LOCAL_CATALOG.vehicles[v.modelId].capacity || 30));
+}
+
+function getLocalSeederCapacity(state) {
+    const seeders = state.farm.inventory.implements.filter(i => LOCAL_CATALOG.implements[i.modelId]?.type === 'seeder');
+    if (!seeders.length) return 20;
+    return Math.max(...seeders.map(i => LOCAL_CATALOG.implements[i.modelId].capacity || 20));
+}
+
+function isPointInUnlockedField(state, x, y) {
+    for (const fieldId of state.farm.unlockedLands) {
+        const land = LOCAL_CATALOG.lands[fieldId];
+        if (land && x >= land.x && x <= land.x + land.w && y >= land.y && y <= land.y + land.h) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function getLocalSoilState(state, key) {
+    const soil = state.farm.soil[key];
+    if (!soil) return 'normal';
+    return typeof soil === 'string' ? soil : (soil.state || 'normal');
+}
+
+function getLocalSoilDir(state, key) {
+    const soil = state.farm.soil[key];
+    if (!soil || typeof soil === 'string') return null;
+    return soil.dir || null;
+}
+
+function growLocalCrop(crop, weather) {
+    if (crop.isDead || crop.isReady) return;
+    if (weather === 'Ensolarado') {
+        crop.growthStage += 20;
+    } else if (weather === 'Chuvoso') {
+        crop.growthStage += 30;
+    } else if (weather === 'Seca') {
+        crop.growthStage += 5;
+        if (Math.random() > 0.8) crop.isDead = true;
+    }
+    if (crop.growthStage >= 100) {
+        crop.growthStage = 100;
+        crop.isReady = true;
+    }
+}
+
+function updateLocalWeather(state) {
+    const current = state.weather;
+    let next = current;
+    if (current === 'Ensolarado') {
+        localSunStreak++;
+        if (localSunStreak > 4 && Math.random() > 0.5) {
+            next = 'Seca';
+        } else if (Math.random() > 0.7) {
+            next = 'Chuvoso';
+            localSunStreak = 0;
+        }
+    } else if (current === 'Seca') {
+        if (Math.random() > 0.6) next = 'Chuvoso';
+    } else if (current === 'Chuvoso') {
+        if (Math.random() > 0.4) {
+            next = 'Ensolarado';
+            localSunStreak = 1;
+        }
+    }
+    state.weather = next;
+}
+
+function updateLocalEconomy(state) {
+    const { economy, farm } = state;
+    if (Math.random() > 0.6) {
+        economy.totalMarketDemand += (Math.random() * 20 - 10);
+    }
+    if (economy.totalMarketDemand < 10) economy.totalMarketDemand = 10;
+    const supplyRatio = farm.harvestedCrops === 0 ? 0.1 : farm.harvestedCrops;
+    const pressure = economy.totalMarketDemand / supplyRatio;
+    if (pressure > 2) {
+        economy.pricePerCrop += Math.floor(Math.random() * 3) + 1;
+    } else if (pressure < 0.5) {
+        economy.pricePerCrop -= Math.floor(Math.random() * 3) + 1;
+    }
+    if (economy.pricePerCrop < 2) economy.pricePerCrop = 2;
+    if (economy.pricePerCrop > 50) economy.pricePerCrop = 50;
+}
+
+function runLocalTick() {
+    const state = ensureLocalState();
+    state.time += 1;
+    updateLocalWeather(state);
+    updateLocalEconomy(state);
+    state.farm.plantedCrops.forEach(crop => growLocalCrop(crop, state.weather));
+    normalizeState(state);
+    return { success: true };
+}
+
+function parseRequestBody(options) {
+    if (!options || !options.body) return {};
+    try {
+        return JSON.parse(options.body);
+    } catch (e) {
+        return {};
+    }
+}
+
+function useLocalFallback(reason) {
+    ensureLocalState();
+    if (!localFallbackLogged) {
+        console.warn('Fallback local ativado', reason || '');
+        localFallbackLogged = true;
+    }
+}
+
+function handleLocalApi(path, options = {}) {
+    const state = ensureLocalState();
+    const method = (options.method || 'GET').toUpperCase();
+    const body = parseRequestBody(options);
+
+    if (path === '/shop/catalog' && method === 'GET') return deepClone(LOCAL_CATALOG);
+    if (path === '/state' && method === 'GET') return deepClone(normalizeState(state));
+    if (path === '/tick' && method === 'POST') return runLocalTick();
+
+    if (path === '/action/sync-fuel' && method === 'POST') {
+        const vehicles = Array.isArray(body.vehicles) ? body.vehicles : [];
+        vehicles.forEach(item => {
+            const vehicle = state.farm.inventory.vehicles.find(v => v.id === item.id);
+            if (vehicle) vehicle.fuel = Math.max(0, item.fuel || 0);
+        });
+        return { success: true };
+    }
+
+    if (path === '/action/refuel' && method === 'POST') {
+        const vehicle = state.farm.inventory.vehicles.find(v => v.id === body.vehicleId);
+        if (!vehicle) return { success: false, message: 'Veiculo nao encontrado' };
+        const model = LOCAL_CATALOG.vehicles[vehicle.modelId];
+        if (!model) return { success: false, message: 'Modelo invalido' };
+        const maxFuel = model.fuelCapacity || 100;
+        const missingFuel = Math.max(0, maxFuel - (vehicle.fuel || 0));
+        const cost = Math.floor(missingFuel * 2);
+        if (missingFuel <= 0) return { success: false, message: 'Tanque ja esta cheio' };
+        if (state.farm.money < cost) return { success: false, message: `Sem dinheiro! Custa ${cost} para abastecer.` };
+        state.farm.money -= cost;
+        vehicle.fuel = maxFuel;
+        normalizeState(state);
+        return { success: true, cost, newFuel: maxFuel, message: `Abastecido por $${cost}` };
+    }
+
+    if (path === '/shop/buy' && method === 'POST') {
+        const { category, itemId } = body;
+        const inventory = state.farm.inventory;
+        if (category === 'vehicles') {
+            const item = LOCAL_CATALOG.vehicles[itemId];
+            if (!item || state.farm.money < item.price) return { success: false, message: 'Compra indisponivel' };
+            state.farm.money -= item.price;
+            const vehicle = { id: `veh_${localCounters.vehicle++}`, modelId: itemId, isOn: false, fuel: item.fuelCapacity || 100 };
+            inventory.vehicles.push(vehicle);
+            normalizeState(state);
+            return { success: true, item: vehicle };
+        }
+        if (category === 'implements') {
+            const item = LOCAL_CATALOG.implements[itemId];
+            if (!item || state.farm.money < item.price) return { success: false, message: 'Compra indisponivel' };
+            state.farm.money -= item.price;
+            const implement = { id: `imp_${localCounters.implement++}`, modelId: itemId, isOn: false };
+            inventory.implements.push(implement);
+            normalizeState(state);
+            return { success: true, item: implement };
+        }
+        if (category === 'seeds') {
+            const item = LOCAL_CATALOG.seeds[itemId];
+            if (!item || state.farm.money < item.price) return { success: false, message: 'Compra indisponivel' };
+            state.farm.money -= item.price;
+            state.farm.seedDepot += item.amount;
+            normalizeState(state);
+            return { success: true };
+        }
+        if (category === 'lands') {
+            const item = LOCAL_CATALOG.lands[itemId];
+            if (!item || state.farm.money < item.price || state.farm.unlockedLands.includes(itemId)) {
+                return { success: false, message: 'Compra indisponivel' };
+            }
+            state.farm.money -= item.price;
+            state.farm.unlockedLands.push(itemId);
+            normalizeState(state);
+            return { success: true };
+        }
+        return { success: false, message: 'Categoria invalida' };
+    }
+
+    if (path === '/shop/sell' && method === 'POST') {
+        const { category, itemId } = body;
+        const inventory = state.farm.inventory;
+        if (category === 'vehicles') {
+            const idx = inventory.vehicles.findIndex(v => v.id === itemId);
+            if (idx === -1) return { success: false, message: 'Veiculo nao encontrado' };
+            const item = inventory.vehicles[idx];
+            const model = LOCAL_CATALOG.vehicles[item.modelId];
+            inventory.vehicles.splice(idx, 1);
+            state.farm.money += Math.floor((model?.price || 0) * 0.8);
+            normalizeState(state);
+            return { success: true };
+        }
+        if (category === 'implements') {
+            const idx = inventory.implements.findIndex(i => i.id === itemId);
+            if (idx === -1) return { success: false, message: 'Implemento nao encontrado' };
+            const item = inventory.implements[idx];
+            const model = LOCAL_CATALOG.implements[item.modelId];
+            inventory.implements.splice(idx, 1);
+            state.farm.money += Math.floor((model?.price || 0) * 0.8);
+            normalizeState(state);
+            return { success: true };
+        }
+        return { success: false, message: 'Categoria invalida' };
+    }
+
+    if (path === '/action/plow' && method === 'POST') {
+        const { x, y } = body;
+        const key = `${x},${y}`;
+        if (!isPointInUnlockedField(state, x, y)) return { success: false };
+        const current = getLocalSoilState(state, key);
+        if (current === 'normal' || current === 'harrowed') {
+            state.farm.soil[key] = { state: 'plowed', dir: null };
+            return { success: true };
+        }
+        return { success: false };
+    }
+
+    if (path === '/action/harrow' && method === 'POST') {
+        const { x, y, dir } = body;
+        const key = `${x},${y}`;
+        if (!isPointInUnlockedField(state, x, y)) return { success: false };
+        if (getLocalSoilState(state, key) === 'plowed') {
+            state.farm.soil[key] = { state: 'harrowed', dir: dir || 'h' };
+            return { success: true };
+        }
+        return { success: false };
+    }
+
+    if (path === '/action/plant' && method === 'POST') {
+        const { x, y } = body;
+        const key = `${x},${y}`;
+        if (!isPointInUnlockedField(state, x, y)) return { success: false };
+        if (getLocalSoilState(state, key) !== 'harrowed') return { success: false };
+        if (state.farm.seederStorage <= 0) return { success: false };
+        if (state.weather === 'Seca') return { success: false };
+        state.farm.seederStorage -= 1;
+        state.farm.soil[key] = { state: 'planted', dir: getLocalSoilDir(state, key) };
+        state.farm.plantedCrops.push({ x, y, plantedTime: state.time, growthStage: 0, isReady: false, isDead: false });
+        normalizeState(state);
+        return { success: true };
+    }
+
+    if (path === '/action/harvest' && method === 'POST') {
+        const { x, y } = body;
+        if (state.farm.harvesterStorage >= state.farm.harvesterCapacity) return { success: false };
+        const idx = state.farm.plantedCrops.findIndex(c => c.x === x && c.y === y);
+        if (idx === -1) return { success: false };
+        const crop = state.farm.plantedCrops[idx];
+        if ((crop.isReady && !crop.isDead) || crop.isDead) {
+            if (crop.isReady && !crop.isDead) state.farm.harvesterStorage += 1;
+            state.farm.plantedCrops.splice(idx, 1);
+            state.farm.soil[`${x},${y}`] = { state: 'normal', dir: null };
+            normalizeState(state);
+            return { success: true };
+        }
+        return { success: false };
+    }
+
+    if (path === '/action/unload' && method === 'POST') {
+        if (state.farm.harvesterStorage <= 0) return { success: false };
+        state.farm.harvestedCrops += state.farm.harvesterStorage;
+        state.farm.harvesterStorage = 0;
+        normalizeState(state);
+        return { success: true };
+    }
+
+    if (path === '/action/truck/load-silo' && method === 'POST') {
+        if (state.farm.harvestedCrops <= 0) return { success: false };
+        if (state.farm.truckCargoType && state.farm.truckCargoType !== 'crops') return { success: false };
+        const space = state.farm.truckCapacity - state.farm.truckStorage;
+        if (space <= 0) return { success: false };
+        const amount = Math.min(state.farm.harvestedCrops, space);
+        state.farm.harvestedCrops -= amount;
+        state.farm.truckStorage += amount;
+        state.farm.truckCargoType = 'crops';
+        normalizeState(state);
+        return { success: true, loaded: amount };
+    }
+
+    if (path === '/action/truck/load-depot' && method === 'POST') {
+        if (state.farm.seedDepot <= 0) return { success: false };
+        if (state.farm.truckCargoType && state.farm.truckCargoType !== 'seeds') return { success: false };
+        const space = state.farm.truckCapacity - state.farm.truckStorage;
+        if (space <= 0) return { success: false };
+        const amount = Math.min(state.farm.seedDepot, space);
+        state.farm.seedDepot -= amount;
+        state.farm.truckStorage += amount;
+        state.farm.truckCargoType = 'seeds';
+        normalizeState(state);
+        return { success: true, loaded: amount };
+    }
+
+    if (path === '/action/truck/sell' && method === 'POST') {
+        if (state.farm.truckCargoType !== 'crops' || state.farm.truckStorage <= 0) return { success: false };
+        const amount = state.farm.truckStorage;
+        const profit = amount * state.economy.pricePerCrop;
+        state.farm.money += profit;
+        state.farm.truckStorage = 0;
+        state.farm.truckCargoType = null;
+        normalizeState(state);
+        return { success: true, profit };
+    }
+
+    if (path === '/action/truck/transfer-seeds' && method === 'POST') {
+        if (state.farm.truckCargoType !== 'seeds' || state.farm.truckStorage <= 0) return { success: false };
+        const space = state.farm.seederCapacity - state.farm.seederStorage;
+        if (space <= 0) return { success: false };
+        const amount = Math.min(state.farm.truckStorage, space);
+        state.farm.truckStorage -= amount;
+        state.farm.seederStorage += amount;
+        if (state.farm.truckStorage <= 0) state.farm.truckCargoType = null;
+        normalizeState(state);
+        return { success: true, transferred: amount };
+    }
+
+    return { success: false, message: `Offline action nao implementada: ${path}` };
+}
+
+async function apiJson(path, options = {}) {
+    if (!API) {
+        useLocalFallback('sem backend configurado para este host');
+        return handleLocalApi(path, options);
+    }
+    try {
+        const response = await fetch(`${API}${path}`, options);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+    } catch (e) {
+        useLocalFallback(e.message);
+        return handleLocalApi(path, options);
+    }
+}
 
 // === Entities ===
 let player;
@@ -1808,8 +2270,7 @@ async function triggerImpl(veh, tx, ty) {
     if (implType === 'seeder') ep = '/action/plant';
     if (!ep) return;
     try { 
-        const r = await fetch(`${API}${ep}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); 
-        const d = await r.json(); 
+        const d = await apiJson(ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); 
         if (d.success) fetchState(); 
     } catch (e) { }
 }
@@ -1820,8 +2281,7 @@ async function triggerHarvest(veh, tx, ty) {
     const tileKey = `${tx},${ty}`;
 
     try { 
-        const r = await fetch(`${API}/action/harvest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: tx, y: ty }) }); 
-        const d = await r.json(); 
+        const d = await apiJson('/action/harvest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: tx, y: ty }) }); 
         if (d.success) fetchState(); 
     } catch (e) { }
 }
@@ -2538,25 +2998,25 @@ async function doContextAction() {
     if (near(ent, SHOP_POS, 100)) { openShop(); return; }
     // Harvester + silo
     if (isInHarvester() && near(ent, SILO_POS, 80)) {
-        try { const r = await fetch(`${API}/action/unload`, { method: 'POST' }); const d = await r.json(); if (d.success) fetch("http://..."); } catch (e) { } return;
+        try { const d = await apiJson('/action/unload', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
     }
     // Truck + silo
     if (isInTruck() && near(ent, SILO_POS, 80)) {
-        try { const r = await fetch(`${API}/action/truck/load-silo`, { method: 'POST' }); const d = await r.json(); if (d.success) fetchState(); } catch (e) { } return;
+        try { const d = await apiJson('/action/truck/load-silo', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
     }
     // Truck + house (load seeds from depot)
     if (isInTruck() && near(ent, HOUSE_POS, 100)) {
-        try { const r = await fetch(`${API}/action/truck/load-depot`, { method: 'POST' }); const d = await r.json(); if (d.success) fetchState(); } catch (e) { } return;
+        try { const d = await apiJson('/action/truck/load-depot', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
     }
     // Truck + sell
     if (isInTruck() && near(ent, SELL_POS, 100)) {
-        try { const r = await fetch(`${API}/action/truck/sell`, { method: 'POST' }); const d = await r.json(); if (d.success) fetchState(); } catch (e) { } return;
+        try { const d = await apiJson('/action/truck/sell', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
     }
     // Truck + seeder (transfer seeds)
     if (isInTruck()) {
         for (const impl of implementSprites) {
             if (impl.type === 'seeder' && near(ent, impl.sprite, 80)) {
-                try { const r = await fetch(`${API}/action/truck/transfer-seeds`, { method: 'POST' }); const d = await r.json(); if (d.success) fetchState(); } catch (e) { } return;
+                try { const d = await apiJson('/action/truck/transfer-seeds', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
             }
         }
     }
@@ -2658,11 +3118,10 @@ function renderShop(cat) {
 
 async function buyItem(cat, id) {
     try {
-        const r = await fetch(`${API}/shop/buy`, {
+        const d = await apiJson('/shop/buy', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ category: cat, itemId: id })
         });
-        const d = await r.json();
         if (d.success) { await fetchState(); renderShop(shopTab); ensureVehicles(); ensureImplements(); }
     } catch (e) { }
 }
@@ -2722,11 +3181,10 @@ function renderSellMenu(cat) {
 
 async function sellItem(cat, id) {
     try {
-        const r = await fetch(`${API}/shop/sell`, {
+        const d = await apiJson('/shop/sell', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ category: cat, itemId: id })
         });
-        const d = await r.json();
         if (d.success) {
             await fetchState();
             renderSellMenu(cat);
@@ -2760,8 +3218,7 @@ function advanceHour() {
 // ============================================================
 async function fetchCatalog() {
     try {
-        const r = await fetch(`${API}/shop/catalog`);
-        const data = await r.json();
+        const data = await apiJson('/shop/catalog');
         if (data && data.vehicles) {
             catalog = data;
             console.log("Catálogo carregado com sucesso.");
@@ -2772,9 +3229,7 @@ async function fetchCatalog() {
 }
 async function fetchState() {
     try {
-        const r = await fetch(`${API}/state`);
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const s = await r.json();
+        const s = normalizeState(await apiJson('/state'));
         lastState = s;
         updateHUD(s); updateSoil(s.farm.soil); updateCrops(s.farm.plantedCrops);
         updateFields(); renderLandZones(); ensureVehicles(); ensureImplements(); renderWorldMap();
@@ -2784,7 +3239,7 @@ async function fetchState() {
     }
 }
 async function forceTick() {
-    try { await fetch(`${API}/tick`, { method: 'POST' }); fetchState(); } catch (e) { }
+    try { await apiJson('/tick', { method: 'POST' }); fetchState(); } catch (e) { }
 }
 
 async function syncFuel() {
@@ -2792,7 +3247,7 @@ async function syncFuel() {
     const vehFuelData = vehicleSprites.map(v => ({ id: v.id, fuel: v.fuel || 0 }));
     if (vehFuelData.length === 0) return;
     try { 
-        await fetch(`${API}/action/sync-fuel`, { 
+        await apiJson('/action/sync-fuel', { 
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ vehicles: vehFuelData })
         });
@@ -2808,11 +3263,10 @@ async function doRefuel() {
     if (!activeVehicle) return;
 
     try {
-        const r = await fetch(`${API}/action/refuel`, {
+        const d = await apiJson('/action/refuel', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ vehicleId: activeVehicle.id })
         });
-        const d = await r.json();
         if (d.success && d.newFuel !== undefined) {
             activeVehicle.fuel = d.newFuel;
             await fetchState(); // Updates money visually
