@@ -7,10 +7,14 @@ import { runTick } from './core/gameLoop.js';
 import Crop from './models/crop.js';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: "*" }
+  cors: { 
+    origin: "*",
+    methods: ["GET", "POST"]
+  },
+  transports: ["websocket", "polling"]
 });
 app.use(cors());
 app.use(express.json());
@@ -372,6 +376,201 @@ app.post('/action/truck/transfer-seeds', (req, res) => {
   if (space <= 0) return res.json({ success: false });
   const n = Math.min(globalState.farm.truckStorage, space);
   globalState.farm.truckStorage -= n;
+});
+
+// SHOP
+app.post('/shop/buy', (req, res) => {
+  const { category, itemId } = req.body;
+  const inv = globalState.farm.inventory;
+
+  if (category === 'vehicles') {
+    const it = CATALOG.vehicles[itemId];
+    if (!it) return res.status(400).json({ success: false, message: 'Item inválido' });
+    if (globalState.farm.money < it.price) return res.status(400).json({ success: false, message: 'Sem dinheiro' });
+    globalState.farm.money -= it.price;
+    const id = `veh_${globalState.counters.vehicle++}`;
+    const vehicle = { id, modelId: itemId, isOn: false, fuel: it.fuelCapacity || 100 };
+    inv.vehicles.push(vehicle);
+    return res.json({ success: true, item: vehicle });
+  }
+  if (category === 'implements') {
+    const it = CATALOG.implements[itemId];
+    if (!it) return res.status(400).json({ success: false, message: 'Item inválido' });
+    if (globalState.farm.money < it.price) return res.status(400).json({ success: false, message: 'Sem dinheiro' });
+    globalState.farm.money -= it.price;
+    const id = `imp_${globalState.counters.implement++}`;
+    const implement = { id, modelId: itemId, isOn: false };
+    inv.implements.push(implement);
+    return res.json({ success: true, item: implement });
+  }
+  if (category === 'seeds') {
+    const it = CATALOG.seeds[itemId];
+    if (!it) return res.status(400).json({ success: false, message: 'Item inválido' });
+    if (globalState.farm.money < it.price) return res.status(400).json({ success: false, message: 'Sem dinheiro' });
+    globalState.farm.money -= it.price;
+    globalState.farm.seedDepot += it.amount;
+    return res.json({ success: true });
+  }
+  if (category === 'lands') {
+    const it = CATALOG.lands[itemId];
+    if (!it) return res.status(400).json({ success: false, message: 'Item inválido' });
+    if (globalState.farm.money < it.price) return res.status(400).json({ success: false, message: 'Sem dinheiro' });
+    if (globalState.farm.unlockedLands.includes(itemId)) return res.status(400).json({ success: false, message: 'Já possui' });
+    globalState.farm.money -= it.price;
+    globalState.farm.unlockedLands.push(itemId);
+    return res.json({ success: true });
+  }
+  if (category === 'items') {
+    const it = CATALOG.items[itemId];
+    if (!it) return res.status(400).json({ success: false, message: 'Item inválido' });
+    if (globalState.farm.money < it.price) return res.status(400).json({ success: false, message: 'Sem dinheiro' });
+    if (itemId === 'cellphone' && globalState.farm.hasCellphone) return res.status(400).json({ success: false, message: 'Já possui' });
+    globalState.farm.money -= it.price;
+    if (itemId === 'cellphone') globalState.farm.hasCellphone = true;
+    return res.json({ success: true });
+  }
+  res.status(400).json({ success: false });
+});
+
+app.post('/shop/sell', (req, res) => {
+  const { category, itemId } = req.body;
+  const inv = globalState.farm.inventory;
+
+  if (category === 'vehicles') {
+    const idx = inv.vehicles.findIndex(v => v.id === itemId);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Veículo não encontrado' });
+
+    const item = inv.vehicles[idx];
+    const model = CATALOG.vehicles[item.modelId];
+    if (!model) return res.status(400).json({ success: false, message: 'Modelo inválido' });
+
+    inv.vehicles.splice(idx, 1);
+    const refund = Math.floor(model.price * 0.8);
+    globalState.farm.money += refund;
+    return res.json({ success: true, refund });
+  }
+
+  if (category === 'implements') {
+    const idx = inv.implements.findIndex(i => i.id === itemId);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Implemento não encontrado' });
+
+    const item = inv.implements[idx];
+    const model = CATALOG.implements[item.modelId];
+    if (!model) return res.status(400).json({ success: false, message: 'Modelo inválido' });
+
+    inv.implements.splice(idx, 1);
+    const refund = Math.floor(model.price * 0.8);
+    globalState.farm.money += refund;
+    return res.json({ success: true, refund });
+  }
+
+  return res.status(400).json({ success: false, message: 'Categoria inválida' });
+});
+
+// IMPLEMENT ACTIONS
+app.post('/action/plow', (req, res) => {
+  const { x, y } = req.body;
+  if (x === undefined || y === undefined) return res.status(400).json({ success: false });
+  if (!isInAnyField(x, y)) return res.json({ success: false });
+  const key = `${x},${y}`, cur = getSoilState(key);
+  if (cur === 'normal' || cur === 'harrowed') {
+    globalState.farm.soil[key] = { state: 'plowed', dir: null };
+    return res.json({ success: true });
+  }
+  res.json({ success: false });
+});
+
+app.post('/action/harrow', (req, res) => {
+  const { x, y, dir } = req.body;
+  if (x === undefined || y === undefined) return res.status(400).json({ success: false });
+  if (!isInAnyField(x, y)) return res.json({ success: false });
+  const key = `${x},${y}`;
+  if (getSoilState(key) === 'plowed') {
+    globalState.farm.soil[key] = { state: 'harrowed', dir: dir || 'h' };
+    return res.json({ success: true });
+  }
+  res.json({ success: false });
+});
+
+app.post('/action/plant', (req, res) => {
+  const { x, y } = req.body;
+  if (x === undefined || y === undefined) return res.status(400).json({ success: false });
+  if (!isInAnyField(x, y)) return res.json({ success: false });
+  const key = `${x},${y}`;
+  if (getSoilState(key) !== 'harrowed') return res.json({ success: false });
+  if (globalState.farm.seederStorage <= 0) return res.json({ success: false });
+  if (globalState.weather === '🔥 Seca') return res.json({ success: false });
+  globalState.farm.seederStorage -= 1;
+  globalState.farm.soil[key] = { state: 'planted', dir: getSoilDir(key) };
+  globalState.farm.plantedCrops.push(new Crop(x, y, globalState.time));
+  res.json({ success: true });
+});
+
+app.post('/action/harvest', (req, res) => {
+  const { x, y } = req.body;
+  if (x === undefined || y === undefined) return res.status(400).json({ success: false });
+  if (globalState.farm.harvesterStorage >= getHarvesterCapacity()) return res.json({ success: false });
+  const ci = globalState.farm.plantedCrops.findIndex(c => c.x === x && c.y === y);
+  if (ci === -1) return res.json({ success: false });
+  const crop = globalState.farm.plantedCrops[ci];
+  if ((crop.isReady && !crop.isDead) || crop.isDead) {
+    if (crop.isReady && !crop.isDead) globalState.farm.harvesterStorage += 1;
+    globalState.farm.plantedCrops.splice(ci, 1);
+    globalState.farm.soil[`${x},${y}`] = { state: 'normal', dir: null };
+    return res.json({ success: true });
+  }
+  res.json({ success: false });
+});
+
+// LOGISTICS
+app.post('/action/unload', (req, res) => {
+  const a = globalState.farm.harvesterStorage;
+  if (a <= 0) return res.json({ success: false });
+  globalState.farm.harvestedCrops += a;
+  globalState.farm.harvesterStorage = 0;
+  res.json({ success: true });
+});
+
+app.post('/action/truck/load-silo', (req, res) => {
+  if (globalState.farm.harvestedCrops <= 0) return res.json({ success: false });
+  if (globalState.farm.truckCargoType && globalState.farm.truckCargoType !== 'crops') return res.json({ success: false });
+  const space = getTruckCapacity() - globalState.farm.truckStorage;
+  if (space <= 0) return res.json({ success: false });
+  const n = Math.min(globalState.farm.harvestedCrops, space);
+  globalState.farm.harvestedCrops -= n;
+  globalState.farm.truckStorage += n;
+  globalState.farm.truckCargoType = 'crops';
+  res.json({ success: true, loaded: n });
+});
+
+app.post('/action/truck/load-depot', (req, res) => {
+  if (globalState.farm.seedDepot <= 0) return res.json({ success: false });
+  if (globalState.farm.truckCargoType && globalState.farm.truckCargoType !== 'seeds') return res.json({ success: false });
+  const space = getTruckCapacity() - globalState.farm.truckStorage;
+  if (space <= 0) return res.json({ success: false });
+  const n = Math.min(globalState.farm.seedDepot, space);
+  globalState.farm.seedDepot -= n;
+  globalState.farm.truckStorage += n;
+  globalState.farm.truckCargoType = 'seeds';
+  res.json({ success: true, loaded: n });
+});
+
+app.post('/action/truck/sell', (req, res) => {
+  if (globalState.farm.truckCargoType !== 'crops' || globalState.farm.truckStorage <= 0) return res.json({ success: false });
+  const a = globalState.farm.truckStorage;
+  const profit = a * globalState.economy.pricePerCrop;
+  globalState.farm.money += profit;
+  globalState.farm.truckStorage = 0;
+  globalState.farm.truckCargoType = null;
+  res.json({ success: true, profit });
+});
+
+app.post('/action/truck/transfer-seeds', (req, res) => {
+  if (globalState.farm.truckCargoType !== 'seeds' || globalState.farm.truckStorage <= 0) return res.json({ success: false });
+  const space = getSeederCapacity() - globalState.farm.seederStorage;
+  if (space <= 0) return res.json({ success: false });
+  const n = Math.min(globalState.farm.truckStorage, space);
+  globalState.farm.truckStorage -= n;
   globalState.farm.seederStorage += n;
   if (globalState.farm.truckStorage <= 0) globalState.farm.truckCargoType = null;
   res.json({ success: true, transferred: n });
@@ -388,6 +587,7 @@ function generateRoomCode() {
 }
 
 io.on('connection', (socket) => {
+  console.log("Cliente conectado:", socket.id);
   console.log(`[Multiplayer] Novo jogador conectado: ${socket.id}`);
 
   // 1. Criar novo jogador (inicialmente sem sala)
@@ -550,6 +750,7 @@ io.on('connection', (socket) => {
   // 9. Desconexão
   socket.on('disconnect', () => {
     const player = players[socket.id];
+    console.log("Cliente saiu:", socket.id);
     if (player) {
       const roomId = player.roomId;
       if (roomId && rooms[roomId]) {
@@ -564,4 +765,4 @@ io.on('connection', (socket) => {
   });
 });
 
-httpServer.listen(PORT, () => console.log(`Backend Multiplayer rodando em http://localhost:${PORT}`));
+httpServer.listen(PORT, () => console.log(`Backend Multiplayer rodando na porta ${PORT}`));

@@ -13,7 +13,7 @@ const game = new Phaser.Game(config);
 
 const TILE = 32;
 const IS_LOCALHOST = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-const API = IS_LOCALHOST ? 'http://localhost:3000' : '';
+const API = IS_LOCALHOST ? 'http://localhost:3000' : 'https://farm-simulator.onrender.com';
 const LOCAL_CATALOG = {
     vehicles: {
         tractor_mf275: { name: 'MF 275', brand: 'Massey Ferguson', type: 'tractor', hp: 50, speed: 5, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.12, friction: 0.965, turnSpeedBase: 0.12, fuelCapacity: 50, price: 0 },
@@ -570,10 +570,10 @@ const STATIC_COLLIDERS = [
 function preload() {
     // --- Terrain tiles ---
     this.load.image('grass', 'assets/terrain/grass.png');
-    this.load.image('dirt',  'assets/terrain/dirt.png');
-    this.load.image('road',  'assets/terrain/road.png');
-    this.load.image('tree',  'assets/terrain/tree.png');
-    this.load.image('lake',  'assets/terrain/lake.png');
+    this.load.image('dirt', 'assets/terrain/dirt.png');
+    this.load.image('road', 'assets/terrain/road.png');
+    this.load.image('tree', 'assets/terrain/tree.png');
+    this.load.image('lake', 'assets/terrain/lake.png');
 
     // --- Crops ---
     this.load.image('crop_1', 'assets/terrain/crop_1.png');
@@ -581,15 +581,15 @@ function preload() {
     this.load.image('crop_3', 'assets/terrain/crop_3.png');
 
     // --- Buildings ---
-    this.load.image('house',       'assets/buildings/house.png');
-    this.load.image('silo',        'assets/buildings/silo.png');
-    this.load.image('shop_bld',    'assets/buildings/shop.png');
-    this.load.image('sell_bld',    'assets/buildings/sell.png');
+    this.load.image('house', 'assets/buildings/house.png');
+    this.load.image('silo', 'assets/buildings/silo.png');
+    this.load.image('shop_bld', 'assets/buildings/shop.png');
+    this.load.image('sell_bld', 'assets/buildings/sell.png');
     this.load.image('gas_station', 'assets/buildings/gas_station.png');
 
     // --- Player ---
     this.load.image('p_down', 'assets/ui/player_down.png');
-    this.load.image('p_up',   'assets/ui/player_up.png');
+    this.load.image('p_up', 'assets/ui/player_up.png');
     this.load.image('p_side', 'assets/ui/player_side.png');
 
     // --- Vehicles (single direction: facing right) ---
@@ -630,18 +630,18 @@ function create() {
     decoGroup = this.add.group();
 
     // Procedural Nature (Arvores e Lagos)
-    for(let i = 0; i < 400; i++) {
+    for (let i = 0; i < 400; i++) {
         const tx = Phaser.Math.Between(0, W);
         const ty = Phaser.Math.Between(0, H);
-        if(tx > 4000 && ty > 5000) continue; // Evitar o terreno central da fazenda e campos
-        if(tx < 3000 && ty < 3000) continue; // Evitar meio da cidade
+        if (tx > 4000 && ty > 5000) continue; // Evitar o terreno central da fazenda e campos
+        if (tx < 3000 && ty < 3000) continue; // Evitar meio da cidade
         const scale = Phaser.Math.FloatBetween(1.0, 1.8);
         const isLake = Math.random() > 0.92;
         const sp = this.add.sprite(tx, ty, isLake ? 'lake' : 'tree').setDepth(isLake ? -8 : 2);
         sp.setScale(isLake ? scale * 3 : scale);
         decoGroup.add(sp);
     }
-    for(let i = 0; i < 15; i++) {
+    for (let i = 0; i < 15; i++) {
         // Casas figurantes na Cidade
         this.add.sprite(Phaser.Math.Between(500, 3000), Phaser.Math.Between(500, 2000), 'house').setDepth(1);
     }
@@ -709,32 +709,32 @@ function create() {
     console.log("Phaser: Create finished. Starting API sync...");
 
     // Non-blocking parallel sync
-(async () => {
-    try {
-        await fetchCatalog();
-    } catch (e) {
-        console.warn("Falha no catálogo, usando fallback local");
-    }
+    (async () => {
+        try {
+            await fetchCatalog();
+        } catch (e) {
+            console.warn("Falha no catálogo, usando fallback local");
+        }
 
-    try {
-        await fetchState();
-    } catch (e) {
-        console.warn("Falha no estado, usando fallback local");
+        try {
+            await fetchState();
+        } catch (e) {
+            console.warn("Falha no estado, usando fallback local");
 
-        // fallback manual
-        lastState = {
-            farm: {
-                soil: {},
-                plantedCrops: {},
-                lands: []
-            }
-        };
-    }
+            // fallback manual
+            lastState = {
+                farm: {
+                    soil: {},
+                    plantedCrops: {},
+                    lands: []
+                }
+            };
+        }
 
-    console.log("Phaser: Initial sync complete (com fallback)");
+        console.log("Phaser: Initial sync complete (com fallback)");
 
-    setTimeout(hideLoading, 1000);
-})();
+        setTimeout(hideLoading, 1000);
+    })();
 
     // Safety timeout: 10 seconds is too long, world should show anyway
     setTimeout(hideLoading, 5000);
@@ -909,7 +909,7 @@ function isValidAutoDriveTarget(veh, targetTile, field, state = veh.autoDriveSta
 function findPendingWorkTile(veh, land, jobType) {
     if (!jobType || !land) return null;
     const cacheKey = `${land.x}_${land.y}_${jobType}`;
-    
+
     if (!pendingTilesCache[cacheKey]) {
         let tiles = [];
         const startX = Math.floor(land.x / TILE) * TILE;
@@ -922,9 +922,9 @@ function findPendingWorkTile(veh, land, jobType) {
                 // Ao invés de re-verificar regras de crop, usamos shouldWorkTile para a fonte de verdade
                 // (isso garante que o estado do solo seja respeitado exatamente como na engine)
                 const isPending = shouldWorkTile(veh, x, y);
-                
+
                 if (isPending) {
-                    tiles.push({ x: x + TILE/2, y: y + TILE/2 });
+                    tiles.push({ x: x + TILE / 2, y: y + TILE / 2 });
                 }
             }
         }
@@ -933,7 +933,7 @@ function findPendingWorkTile(veh, land, jobType) {
 
     const availableTiles = pendingTilesCache[cacheKey];
     if (!availableTiles || availableTiles.length === 0) return null;
-    
+
     const state = veh.autoDriveState || {};
     if (!state.recentTargets) state.recentTargets = [];
     const referenceHeading = Number.isFinite(state.resumeHeading)
@@ -944,11 +944,11 @@ function findPendingWorkTile(veh, land, jobType) {
 
     let bestTile = null;
     let maxScore = -Infinity;
-    
+
     for (let i = 0; i < availableTiles.length; i++) {
         const t = availableTiles[i];
         const soilKey = `${Math.floor(t.x / TILE) * TILE},${Math.floor(t.y / TILE) * TILE}`;
-        
+
         // 1. Evitar trabalhados nesta sessão
         if (state && state.workedTiles && state.workedTiles.has(soilKey)) continue;
 
@@ -956,23 +956,23 @@ function findPendingWorkTile(veh, land, jobType) {
         if (soilKey === lastRecoveryKey) continue;
 
         const dist = Math.hypot(t.x - veh.sprite.x, t.y - veh.sprite.y);
-        
+
         // CÁLCULO DE SCORE
         let score = 10000 - dist; // Base: quanto mais perto melhor
         if (state.recentTargets.includes(soilKey)) score -= 3500;
 
         // Bônus: Início de faixa (preferir x mínimo para horizontal, y mínimo para vertical)
-        const isStartOfLine = (referenceAxis === 'horizontal') 
-            ? (t.x <= land.x + TILE) 
+        const isStartOfLine = (referenceAxis === 'horizontal')
+            ? (t.x <= land.x + TILE)
             : (t.y <= land.y + TILE);
-        
+
         if (isStartOfLine) score += 2000;
 
         // Bônus: Continuidade (tem vizinho pendente na mesma linha?)
         const nextX = (referenceAxis === 'horizontal') ? t.x + TILE : t.x;
         const nextY = (referenceAxis === 'horizontal') ? t.y : t.y + TILE;
-        
-        const hasContinuity = availableTiles.some(at => 
+
+        const hasContinuity = availableTiles.some(at =>
             Math.abs(at.x - nextX) < 5 && Math.abs(at.y - nextY) < 5
         );
         if (hasContinuity) score += 1000;
@@ -982,7 +982,7 @@ function findPendingWorkTile(veh, land, jobType) {
             bestTile = t;
         }
     }
-    
+
     if (bestTile) {
         rememberAutoDriveTarget(state, getAutoDriveTileKey(bestTile));
     }
@@ -1049,14 +1049,14 @@ function enterAutoDriveRecovery(veh, targetTile, announce = true) {
 function triggerAutoDriveFallback(veh) {
     if (!veh.autoDriveState) return;
     const state = veh.autoDriveState;
-    
+
     state.recoveryAttempts = (state.recoveryAttempts || 0) + 1;
-    
+
     if (state.recoveryAttempts >= AUTO_DRIVE_RECOVERY_MAX_ATTEMPTS) {
         disableAutoDrive(veh, 'AUTO DRIVE: OFF - erro crítico de navegação', 'error');
         return;
     }
-    
+
     clearPendingTilesCache();
     const jobType = getJobType(veh);
     const fieldInfo = getAutoDriveFieldContext(veh, state);
@@ -1073,18 +1073,18 @@ function triggerAutoDriveFallback(veh) {
         state.shiftHeading = 0;
         state.targetAngle = 0;
         state.status = 'recovery';
-        
+
         state.lastRecoveryTarget = targetTile;
         state.posCheckPos = { x: veh.sprite.x, y: veh.sprite.y };
         state.posCheckFrame = 0;
-        
+
         // Levantar implemento imediatamente
         if (veh.type === 'harvester') veh.toolOn = false;
         else if (veh.type === 'tractor') {
             const hImpl = implementSprites.find(i => i.hitchedTo === veh.id);
             if (hImpl) hImpl.isOn = false;
         }
-        
+
         showToast('Navegando para próxima área...', 'warning');
     } else {
         disableAutoDrive(veh, 'Campo completo!', 'success');
@@ -1164,7 +1164,7 @@ function buildAutoDriveState(veh, fieldInfo) {
 function renderGpsGuides() {
     if (!gpsGuideGfx) return;
     gpsGuideGfx.clear();
-    
+
     // Only show guides for the active vehicle
     const veh = getActiveVehicle();
     if (!veh) return;
@@ -1248,7 +1248,7 @@ function activateAutoDrive(veh) {
     if (!enterAutoDriveRecovery(veh, targetTile, false)) return false;
     veh.autoDriveEnabled = true;
     veh.autoDriveState.status = 'recovery';
-    
+
     renderGpsGuides();
     refreshStatusHUD();
     showToast('Procurando área não trabalhada...', 'info');
@@ -1262,7 +1262,7 @@ function updateAutoDriveRoute(veh) {
 
     const state = veh.autoDriveState;
     const activeField = getOwnedFieldAtPoint(veh.sprite.x, veh.sprite.y);
-    
+
     // 1. Verificação de Campo
     if (!activeField || activeField.id !== state.fieldId) {
         state.status = 'fora_da_area';
@@ -1282,7 +1282,7 @@ function updateAutoDriveRoute(veh) {
         const movingPositive = axis === 'horizontal'
             ? Math.cos(state.heading) >= 0
             : Math.sin(state.heading) >= 0;
-            
+
         const remaining = movingPositive ? forwardBounds.max - forwardValue : forwardValue - forwardBounds.min;
 
         // Detecta fim da linha com margem menor (0.2) e verificação de limite do campo
@@ -1295,33 +1295,33 @@ function updateAutoDriveRoute(veh) {
         // Lookahead: verificar os próximos 3 a 5 tiles para ver se há trabalho na linha atual
         const stepDir = movingPositive ? TILE : -TILE;
         let hasWorkAhead = false;
-        
+
         for (let i = 1; i <= 4; i++) {
             const checkX = axis === 'horizontal' ? veh.sprite.x + (stepDir * i) : veh.sprite.x;
             const checkY = axis === 'vertical' ? veh.sprite.y + (stepDir * i) : veh.sprite.y;
-            
+
             // Verifica se está dentro do campo ainda
             if (checkX < field.x || checkX > field.x + field.w || checkY < field.y || checkY > field.y + field.h) {
                 break;
             }
-            
+
             // Arredonda para alinhar com o grid do solo
             const tx = Math.floor(checkX / TILE) * TILE;
             const ty = Math.floor(checkY / TILE) * TILE;
-            
+
             if (shouldWorkTile(veh, tx, ty)) {
                 hasWorkAhead = true;
                 break;
             }
         }
-        
+
         // Se não encontrou nenhum trabalho à frente nesta linha, pula para o próximo target (recovery)
         if (!hasWorkAhead) {
             console.log('[AUTODRIVE] Linha atual vazia à frente, pulando para a próxima faixa...');
             triggerAutoDriveFallback(veh);
             return;
         }
-    } 
+    }
 }
 function getAutoDriveTargetAngle(veh) {
     if (!veh.autoDriveEnabled || !veh.autoDriveState) return veh.angle;
@@ -1407,7 +1407,7 @@ function runRecoveryLogicLegacy(veh) {
     if (state.posCheckFrame >= 120) {
         const checkPos = state.posCheckPos || { x: veh.sprite.x, y: veh.sprite.y };
         const distMoved = Math.hypot(veh.sprite.x - checkPos.x, veh.sprite.y - checkPos.y);
-        
+
         if (distMoved < 5) {
             console.log('[RECOVERY] Travado no recovery, tentando novo target...');
             triggerAutoDriveFallback(veh);
@@ -1415,7 +1415,7 @@ function runRecoveryLogicLegacy(veh) {
         } else if (distMoved > TILE * 2) {
             state.recoveryAttempts = 0;
         }
-        
+
         state.posCheckPos = { x: veh.sprite.x, y: veh.sprite.y };
         state.posCheckFrame = 0;
     }
@@ -1425,11 +1425,11 @@ function runRecoveryLogicLegacy(veh) {
 
     if (dist < TILE) { // Alterado para TILE (User requirement)
         console.log('[RECOVERY] Chegou ao destino, validando continuidade...');
-        
+
         // Validação de trabalho à frente antes de sair do recovery
         const fieldInfo = getOwnedFieldAtPoint(veh.sprite.x, veh.sprite.y);
         const jobType = getJobType(veh);
-        
+
         if (fieldInfo) {
             // Tenta construir o estado e verifica se a linha atual tem algo pendente
             const testState = buildAutoDriveState(veh, fieldInfo);
@@ -1437,14 +1437,14 @@ function runRecoveryLogicLegacy(veh) {
                 x: veh.sprite.x + Math.cos(testState.heading) * TILE,
                 y: veh.sprite.y + Math.sin(testState.heading) * TILE
             };
-            
+
             // Se o tile imediatamente à frente não é pendente, talvez não seja o melhor lugar para começar "working"
             const isAheadPending = shouldWorkTile(veh, Math.floor(aheadTile.x / TILE) * TILE, Math.floor(aheadTile.y / TILE) * TILE);
-            
+
             if (isAheadPending) {
                 state.mode = 'working';
                 state.recoveryAttempts = 0;
-                
+
                 // Abaixar implemento
                 if (veh.type === 'harvester') veh.toolOn = true;
                 else if (veh.type === 'tractor') {
@@ -1475,7 +1475,7 @@ function runRecoveryLogicLegacy(veh) {
         disableAutoDrive(veh, 'AUTO DRIVE: OFF - erro crítico de navegação', 'error');
         return;
     }
-    
+
     const baseTurnSpeed = m.turnSpeedBase || 0.10;
     veh.angle = rotateAngleToward(veh.angle, targetAngle, baseTurnSpeed);
     veh.angle = normalizeAngle(veh.angle);
@@ -1485,7 +1485,7 @@ function runRecoveryLogicLegacy(veh) {
     const ratios = m.gears === 6 ? RATIOS_6 : RATIOS_4;
     const gearMaxSpeed = maxSpeed * (ratios[veh.gear] || 0.25) * 0.8;
     let accel = (m.acceleration || 0.08) * 0.45;
-    
+
     veh.velocity = Math.min(veh.velocity + accel, gearMaxSpeed);
     if (veh.velocity < AUTO_DRIVE_MIN_SPEED) veh.velocity = AUTO_DRIVE_MIN_SPEED;
 
@@ -1520,8 +1520,8 @@ function runRecoveryLogicLegacy(veh) {
     }
 
     // 10. Progress tracking
-    veh.autoDriveState.activeTime += (1/60);
-    
+    veh.autoDriveState.activeTime += (1 / 60);
+
     console.log(`[RECOVERY] mode=${state.mode} dist=${dist.toFixed(1)} vel=${veh.velocity.toFixed(2)} attempts=${state.recoveryAttempts}`);
 }
 
@@ -1645,7 +1645,7 @@ function runRecoveryLogic(veh) {
         else if (Math.abs(veh.velocity) < gearMaxSpeed * 0.3 && veh.gear > 1) veh.gear--;
     }
 
-    veh.autoDriveState.activeTime += (1/60);
+    veh.autoDriveState.activeTime += (1 / 60);
     console.log(`[RECOVERY] dist=${dist.toFixed(1)} vel=${veh.velocity.toFixed(2)} attempts=${state.recoveryAttempts}`);
 }
 
@@ -1718,15 +1718,15 @@ function runVehicleLogic(veh, isControlled) {
         } else if (state.mode === 'working') {
             // Only enforce tool-on while in working mode
             if (veh.type === 'tractor') {
-                 const hImpl = implementSprites.find(i => i.hitchedTo === veh.id);
-                 if (!hImpl || !hImpl.isOn) disableAutoDrive(veh, 'AUTO DRIVE: OFF - implemento desligado', 'warning');
+                const hImpl = implementSprites.find(i => i.hitchedTo === veh.id);
+                if (!hImpl || !hImpl.isOn) disableAutoDrive(veh, 'AUTO DRIVE: OFF - implemento desligado', 'warning');
             } else if (veh.type === 'harvester' && !veh.toolOn) {
                 disableAutoDrive(veh, 'AUTO DRIVE: OFF - plataforma desligada', 'warning');
             } else if (!getOwnedFieldAtPoint(veh.sprite.x, veh.sprite.y)) {
                 disableAutoDrive(veh, 'AUTO DRIVE: OFF - fora da área de trabalho', 'warning');
             }
         }
-        
+
         autoDriveActive = veh.autoDriveEnabled && !!veh.autoDriveState;
         if (autoDriveActive) {
 
@@ -1735,7 +1735,7 @@ function runVehicleLogic(veh, isControlled) {
             if (state.posCheckFrame >= AUTO_DRIVE_RECOVERY_CHECK_FRAMES) {
                 const checkPos = state.posCheckPos || { x: veh.sprite.x, y: veh.sprite.y };
                 const distMoved = Math.hypot(veh.sprite.x - checkPos.x, veh.sprite.y - checkPos.y);
-                
+
                 if (distMoved < AUTO_DRIVE_RECOVERY_MIN_MOVE) {
                     // Vehicle hasn't moved - enter recovery
                     triggerAutoDriveFallback(veh);
@@ -1743,14 +1743,14 @@ function runVehicleLogic(veh, isControlled) {
                 } else if (state.recoveryAttempts > 0 && distMoved > TILE * 2) {
                     state.recoveryAttempts = 0;
                 }
-                
+
                 state.posCheckPos = { x: veh.sprite.x, y: veh.sprite.y };
                 state.posCheckFrame = 0;
             }
 
             clutchPressed = false;
             braking = false;
-            throttleForward = true; 
+            throttleForward = true;
             updateAutoDriveRoute(veh);
         }
     }
@@ -1792,7 +1792,7 @@ function runVehicleLogic(veh, isControlled) {
 
         if (throttleForward) veh.velocity = Math.min(veh.velocity + accel, speedLimit);
         if (throttleReverse) veh.velocity = Math.max(veh.velocity - accel * 0.6, -gearMaxSpeed * 0.5);
-        
+
         if (!throttleForward && !throttleReverse) {
             veh.velocity *= (m.friction || 0.985);
         }
@@ -1828,7 +1828,7 @@ function runVehicleLogic(veh, isControlled) {
                 veh.sprite.y = clampedY;
                 applyAutoDriveLaneCorrection(veh);
             }
-            
+
             if (Math.abs(vx) > Math.abs(vy)) veh.lastMoveDir = 'h';
             else if (Math.abs(vy) > Math.abs(vx)) veh.lastMoveDir = 'v';
         }
@@ -1840,7 +1840,7 @@ function runVehicleLogic(veh, isControlled) {
         let fuelMult = 1.0;
         if (!isOnRoad(veh.sprite.x, veh.sprite.y)) fuelMult *= 1.35;
         if (isToolOn(veh)) fuelMult *= 1.6;
-        
+
         const fuelConsumptionRate = (0.0005 + (veh.rpm / 3000) * 0.0015) * fuelMult;
         veh.fuel = Math.max(0, (veh.fuel || 0) - fuelConsumptionRate);
         if (veh.fuel <= 0) doStall(veh);
@@ -1897,15 +1897,15 @@ function runVehicleLogic(veh, isControlled) {
         const ty = Math.floor(veh.sprite.y / TILE) * TILE;
         if (tx !== veh.autoDriveState.lastTile.x || ty !== veh.autoDriveState.lastTile.y) {
             const width = getImplWidth(veh);
-            const tiles = [{x: tx, y: ty}];
+            const tiles = [{ x: tx, y: ty }];
             if (width >= 2) tiles.push(veh.lastMoveDir === 'h' ? { x: tx, y: ty - TILE } : { x: tx + TILE, y: ty });
             if (width >= 3) tiles.push(veh.lastMoveDir === 'h' ? { x: tx, y: ty + TILE } : { x: tx - TILE, y: ty });
-            
+
             for (const t of tiles) {
                 if (shouldWorkTile(veh, t.x, t.y)) {
                     if (veh.type === 'harvester') triggerHarvest(veh, t.x, t.y);
                     if (veh.type === 'tractor') triggerImpl(veh, t.x, t.y);
-                    
+
                     if (veh.autoDriveEnabled) {
                         veh.autoDriveState.workedTiles.add(`${t.x},${t.y}`);
                     }
@@ -1919,7 +1919,7 @@ function runVehicleLogic(veh, isControlled) {
     if (veh.autoDriveEnabled) {
         updateAutoDriveProgress(veh);
         // Active time count (User requirement: only while autodrive is active)
-        veh.autoDriveState.activeTime += (1/60); // Assuming 60fps
+        veh.autoDriveState.activeTime += (1 / 60); // Assuming 60fps
     }
 }
 
@@ -1973,7 +1973,7 @@ function update() {
     // 3. Visuals that depend on overall state
     renderMiniMap();
     renderGpsGuides();
-    
+
     if (!window.lastMonitorUpdate || Date.now() - window.lastMonitorUpdate > 300) {
         renderFieldMonitor();
         window.lastMonitorUpdate = Date.now();
@@ -1999,7 +1999,7 @@ function update() {
     if (multiplayerMode && socket && socket.connected) {
         if (!this._lastMoveEmit || Date.now() - this._lastMoveEmit > 30) { // ~33fps sync
             const activeVeh = getActiveVehicle();
-            
+
             // Sync Player Movement
             socket.emit('playerMove', {
                 x: activeVeh ? activeVeh.sprite.x : player.x,
@@ -2034,28 +2034,28 @@ function handleContinuousActions() {
     if (keys.o.isDown && near(veh.sprite, GAS_STATION_POS, 100)) {
         const m = getVehicleModel(veh);
         const mainCap = m?.fuelCapacity || 100;
-        
+
         // Prioridade 1: Tanque principal
         if (veh.fuel < mainCap) {
             veh.fuel += 2;
             if (veh.fuel > mainCap) veh.fuel = mainCap;
-            
+
             if (!veh._lastRefuelReq || Date.now() - veh._lastRefuelReq > 500) {
-                apiJson('/action/refuel', { method: 'POST', body: JSON.stringify({ amount: 2 }) }).catch(e=>e);
+                apiJson('/action/refuel', { method: 'POST', body: JSON.stringify({ amount: 2 }) }).catch(e => e);
                 veh._lastRefuelReq = Date.now();
             }
-        } 
+        }
         // Prioridade 2: Tanque de carga (apenas para caminhão)
         else if (veh.type === 'truck') {
             const tankCap = m.tankCapacity || 1000;
             if (!veh.fuelTank) veh.fuelTank = 0;
-            
+
             if (veh.fuelTank < tankCap) {
                 veh.fuelTank += 5;
                 if (veh.fuelTank > tankCap) veh.fuelTank = tankCap;
-                
+
                 if (!veh._lastRefuelReq || Date.now() - veh._lastRefuelReq > 500) {
-                    apiJson('/action/refuel', { method: 'POST', body: JSON.stringify({ amount: 5 }) }).catch(e=>e);
+                    apiJson('/action/refuel', { method: 'POST', body: JSON.stringify({ amount: 5 }) }).catch(e => e);
                     veh._lastRefuelReq = Date.now();
                 }
             }
@@ -2196,7 +2196,7 @@ function shouldWorkTile(veh, tx, ty) {
     const soilKey = `${tx},${ty}`;
     const soil = lastState.farm.soil[soilKey];
     const st = typeof soil === 'object' ? soil.state : (soil || 'normal');
-    
+
     // Se já foi trabalhado por ESTA máquina nesta sessão de autodrive, ignora
     if (veh.autoDriveEnabled && veh.autoDriveState.workedTiles.has(soilKey)) return false;
 
@@ -2204,17 +2204,17 @@ function shouldWorkTile(veh, tx, ty) {
         const crop = lastState.farm.plantedCrops.find(c => Math.abs(c.x - tx) < 5 && Math.abs(c.y - ty) < 5);
         return crop && crop.isReady && !crop.isDead;
     }
-    
+
     const hImpl = implementSprites.find(i => i.hitchedTo === veh.id);
     if (!hImpl) return false;
     const model = catalog.implements[hImpl.modelId];
     if (!model) return false;
-    
+
     const type = model.type;
     if (type === 'plow') return st !== 'plowed';
     if (type === 'harrow') return st === 'plowed';
     if (type === 'seeder') return st === 'harrowed';
-    
+
     return false;
 }
 function getCurrentHp() {
@@ -2231,7 +2231,7 @@ function getNextParkingSpot(category) {
         for (let i = 0; i < 20; i++) {
             const x = SHOP_PARKING_START.x + (i % 6) * 100;
             const y = SHOP_PARKING_START.y + Math.floor(i / 6) * 100;
-            const spot = {x, y};
+            const spot = { x, y };
 
             // Verificar se o espaço está livre (distância > 50px)
             const isFree = !occupied.some(v => Phaser.Math.Distance.Between(v.x, v.y, spot.x, spot.y) < 50);
@@ -2244,7 +2244,7 @@ function getNextParkingSpot(category) {
         for (let i = 0; i < 30; i++) {
             const x = IMPL_BARN_START.x + (i % 5) * 120;
             const y = IMPL_BARN_START.y + Math.floor(i / 5) * 120;
-            const spot = {x, y};
+            const spot = { x, y };
 
             const isFree = !occupied.some(impl => Phaser.Math.Distance.Between(impl.x, impl.y, spot.x, spot.y) < 50);
             if (isFree) return spot;
@@ -2318,7 +2318,7 @@ function ensureVehicles() {
                     fieldId: null,
                     field: null,
                     workedTiles: new Set(),
-                    activeTime: 0, 
+                    activeTime: 0,
                     lastTile: { x: -1, y: -1 },
                     slowFrames: 0,
                     turnPhase: 'straight',
@@ -2381,9 +2381,9 @@ function ensureImplements() {
 async function triggerImpl(veh, tx, ty) {
     const hImpl = implementSprites.find(i => i.hitchedTo === veh.id);
     if (!hImpl) return;
-    
+
     // Contagem de área trabalhada global (Sync via servidor)
-    const tileKey = `${tx},${ty}`; 
+    const tileKey = `${tx},${ty}`;
     // workedTiles removido pois o monitor agora usa o solo global do lastState
 
 
@@ -2393,9 +2393,9 @@ async function triggerImpl(veh, tx, ty) {
     if (implType === 'harrow') { ep = '/action/harrow'; body.dir = veh.lastMoveDir || 'h'; }
     if (implType === 'seeder') ep = '/action/plant';
     if (!ep) return;
-    try { 
-        const d = await apiJson(ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); 
-        if (d.success) fetchState(); 
+    try {
+        const d = await apiJson(ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (d.success) fetchState();
     } catch (e) { }
 }
 async function triggerHarvest(veh, tx, ty) {
@@ -2404,9 +2404,9 @@ async function triggerHarvest(veh, tx, ty) {
     // Sincronização global via servidor
     const tileKey = `${tx},${ty}`;
 
-    try { 
-        const d = await apiJson('/action/harvest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: tx, y: ty }) }); 
-        if (d.success) fetchState(); 
+    try {
+        const d = await apiJson('/action/harvest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: tx, y: ty }) });
+        if (d.success) fetchState();
     } catch (e) { }
 }
 
@@ -2415,7 +2415,7 @@ async function triggerHarvest(veh, tx, ty) {
 // ============================================================
 function doToggleVehicle() {
     if (shopOpen) return;
-    
+
     if (activeVehIdx >= 0) {
         // Saindo do veículo
         const veh = getActiveVehicle();
@@ -2434,7 +2434,7 @@ function doToggleVehicle() {
             if (near(player, v.sprite, 80)) {
                 activeVehIdx = i;
                 player.setVisible(false);
-                
+
                 // Auto-ativar monitor de campo para máquinas avançadas
                 const m = getVehicleModel(v);
                 if (m && Number(m.gears) === 6 && m.autoDrive) {
@@ -2465,10 +2465,10 @@ function doShiftUp() {
         showToast("Pressione SHIFT (Embreagem)", "warning");
         return;
     }
-    if (veh && veh.gear < m.gears) { 
-        veh.gear++; 
+    if (veh && veh.gear < m.gears) {
+        veh.gear++;
         console.log(`Marcha aumentada para: ${veh.gear}`);
-        refreshGearHUD(); 
+        refreshGearHUD();
     }
 }
 function doShiftDown() {
@@ -2482,10 +2482,10 @@ function doShiftDown() {
         showToast("Pressione SHIFT (Embreagem)", "warning");
         return;
     }
-    if (veh && veh.gear > 1) { 
-        veh.gear--; 
+    if (veh && veh.gear > 1) {
+        veh.gear--;
         console.log(`Marcha reduzida para: ${veh.gear}`);
-        refreshGearHUD(); 
+        refreshGearHUD();
     }
 }
 function doToggleTransmission() {
@@ -2541,7 +2541,7 @@ function doToggleEngine() {
         disableAutoDrive(activeVehicle, 'AUTO DRIVE: OFF - motor desligado', 'warning');
     }
     if (activeVehicle.engineOn) activeVehicle.stallProtectionMs = Date.now() + 1500;
-    
+
     activeVehicle.rpm = activeVehicle.engineOn ? 800 : 0;
     refreshStatusHUD();
     updateDashboard();
@@ -2600,10 +2600,10 @@ function doToggleHitch() {
     for (const impl of implementSprites) {
         // Segurança: Verificar se já não está preso a OUTRO veículo
         if (impl.hitchedTo) continue;
-        
+
         const d = Phaser.Math.Distance.Between(veh.sprite.x, veh.sprite.y, impl.sprite.x, impl.sprite.y);
-        
-        if (d < 85) { 
+
+        if (d < 85) {
             console.log(`Engatando implemento: ${impl.id} no veículo ${veh.id}`);
             veh.attachedImplementId = impl.id;
             impl.hitchedTo = veh.id;
@@ -2617,7 +2617,7 @@ function doToggleHitch() {
 
 function doToggleVehicle() {
     if (shopOpen) return;
-    
+
     // Clear stall/machine state before switching
     const currentVeh = getActiveVehicle();
     if (currentVeh) currentVeh.isEngineStalling = false;
@@ -2628,21 +2628,21 @@ function doToggleVehicle() {
         const veh = vehicleSprites[activeVehIdx];
         // O AutoDrive deve CONTINUAR funcionando ao sair
         activeVehIdx = -1;
-        
+
         player.setVisible(true);
         player.x = veh.sprite.x + TILE;
         player.y = veh.sprite.y;
         player.rotation = 0;
         // veh.sprite.rotation is NOT reset to 0, stays at current angle
-        
+
         const scene = this.scene ? this : game.scene.scenes[0];
         scene.cameras.main.startFollow(player);
-        
+
         document.getElementById('dashboard').style.display = 'none';
         const mon = document.getElementById('field-monitor');
         if (mon) mon.style.display = 'none';
         monitorVisible = false;
-        
+
         refreshGearHUD();
         return;
     }
@@ -2657,10 +2657,10 @@ function doToggleVehicle() {
         activeVehIdx = best;
         const activeVehicle = vehicleSprites[best];
         const m = catalog.vehicles[activeVehicle.modelId];
-        
+
         maxGears = (m?.gears || 4);
         transMode = (m?.gearType === 'auto') ? 'auto' : 'manual';
-        
+
         // Auto-ativar monitor de campo para máquinas avançadas
         if (Number(maxGears) === 6 && (m?.autoDrive)) {
             monitorVisible = true;
@@ -2668,7 +2668,7 @@ function doToggleVehicle() {
 
         // NÃO resetar AutoDrive ao entrar! 
         // Apenas atualizar HUD
-        highlightVehicle(-1); 
+        highlightVehicle(-1);
         this.cameras.main.startFollow(activeVehicle.sprite);
         document.getElementById('dashboard').style.display = 'flex';
         updateDashboard();
@@ -2814,7 +2814,7 @@ function renderMiniMap() {
     const py = (y) => y * scaleY;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // Fundo Grama Escura
     ctx.fillStyle = '#112211';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2880,13 +2880,13 @@ function renderLandMonitor() {
 
 function getLandStats(land) {
     if (!lastState || !lastState.farm || !lastState.farm.soil) return { plow: 0, harrow: 0, seed: 0, g1: 0, g2: 0, ready: 0, harv: 0 };
-    
+
     let plowCount = 0, harrowCount = 0, seedCount = 0;
     let growth1Count = 0, growth2Count = 0, readyCount = 0, harvestedCount = 0;
     const totalTiles = Math.floor(land.w / TILE) * Math.floor(land.h / TILE);
     if (totalTiles <= 0) return { plow: 0, harrow: 0, seed: 0, g1: 0, g2: 0, ready: 0, harv: 0 };
 
-    const fieldCrops = lastState.farm.plantedCrops.filter(c => 
+    const fieldCrops = lastState.farm.plantedCrops.filter(c =>
         c.x >= land.x && c.x < land.x + land.w && c.y >= land.y && c.y < land.y + land.h
     );
 
@@ -2933,10 +2933,10 @@ function renderFieldMonitor() {
 
     const veh = getActiveVehicle();
     const model = getVehicleModel(veh);
-    
+
     // Visibilidade estrita: 6 marchas + autodrive + monitorVisible
     const shouldShow = veh && model && Number(model.gears) === 6 && model.autoDrive && monitorVisible;
-    
+
     if (!shouldShow) {
         monDiv.style.display = 'none';
         return;
@@ -3015,13 +3015,13 @@ function renderFieldMonitor() {
     const fieldInfo = getOwnedFieldAtPoint(veh.sprite.x, veh.sprite.y);
     const waitingDiv = document.getElementById('mon-local-waiting');
     const activeDiv = document.getElementById('mon-local-active');
-    
+
     if (!fieldInfo || !fieldInfo.land) {
         if (waitingDiv) waitingDiv.style.display = 'block';
         if (activeDiv) activeDiv.style.display = 'none';
         return; // Retorna pois não há campo atual
     }
-    
+
     if (waitingDiv) waitingDiv.style.display = 'none';
     if (activeDiv) activeDiv.style.display = 'flex';
 
@@ -3032,7 +3032,7 @@ function renderFieldMonitor() {
 
     const land = fieldInfo.land;
     if (!land || !land.w || !land.h || !isFinite(land.w) || !isFinite(land.h)) return;
-    
+
     const scaleX = canvas.width / land.w;
     const scaleY = canvas.height / land.h;
     if (!isFinite(scaleX) || !isFinite(scaleY)) return;
@@ -3045,7 +3045,7 @@ function renderFieldMonitor() {
     let growth1Count = 0, growth2Count = 0, readyCount = 0, harvestedCount = 0;
     const totalFieldTiles = Math.floor(land.w / TILE) * Math.floor(land.h / TILE);
 
-    const fieldCrops = lastState.farm.plantedCrops.filter(c => 
+    const fieldCrops = lastState.farm.plantedCrops.filter(c =>
         c.x >= land.x && c.x < land.x + land.w && c.y >= land.y && c.y < land.y + land.h
     );
 
@@ -3271,7 +3271,7 @@ function renderCellphoneMenu(cat) {
         }
     } else if (cat === 'sell') {
         const hitchedIds = new Set(implementSprites.filter(i => i.hitchedTo).map(i => i.id));
-        
+
         inv.vehicles.forEach(v => {
             const it = catalog.vehicles[v.modelId];
             if (!it) return;
@@ -3367,7 +3367,7 @@ function renderShop(cat) {
                     ? `<span>HP: <b>${it.hp}</b></span> <span>Marchas: <b>${trans}${it.gears}</b></span>`
                     : `<span>Cap: <b>${it.capacity}L</b></span> <span>HP: <b>${it.hp}</b></span> <span>Marchas: <b>${trans}${it.gears}</b></span>`;
                 const qty = vehicleCounts[id] || 0;
-                
+
                 sectionHtml += `<div class="shop-item">
                     ${it.autoDrive ? '<div class="si-autodrive">AUTODRIVE</div>' : ''}
                     <div class="si-brand">${it.brand}</div>
@@ -3453,14 +3453,14 @@ function renderShop(cat) {
                 </div>`;
             }
         }
-        
+
         html += `<div class="shop-category-title" style="color:#e74c3c; border-color:#e74c3c; margin-top:20px;">Vender Implementos</div>`;
         if (inv.implements.length === 0) {
             html += '<div class="shop-info">Você não possui implementos para vender.</div>';
         } else {
             // Verificar quais implementos estão engatados agora na simulação local
             const hitchedIds = new Set(implementSprites.filter(i => i.hitchedTo).map(i => i.id));
-            
+
             for (const implement of inv.implements) {
                 const it = catalog.implements[implement.modelId];
                 if (!it) continue;
@@ -3484,11 +3484,11 @@ async function buyItem(cat, id) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ category: cat, itemId: id })
         });
-        if (d.success) { 
-            await fetchState(); 
-            renderShop(shopTab); 
-            ensureVehicles(); 
-            ensureImplements(); 
+        if (d.success) {
+            await fetchState();
+            renderShop(shopTab);
+            ensureVehicles();
+            ensureImplements();
             if (cat === 'items' && id === 'cellphone') {
                 showToast('Celular comprado! Aperte Z para acessar a Loja Rápida.', 'success');
             }
@@ -3569,19 +3569,19 @@ async function syncFuel() {
     if (!isHydrated || !catalog) return;
     const vehFuelData = vehicleSprites.map(v => ({ id: v.id, fuel: v.fuel || 0 }));
     if (vehFuelData.length === 0) return;
-    try { 
-        await apiJson('/action/sync-fuel', { 
-            method: 'POST', headers: {'Content-Type':'application/json'},
+    try {
+        await apiJson('/action/sync-fuel', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ vehicles: vehFuelData })
         });
-    } catch(e){}
+    } catch (e) { }
 }
 
 async function doRefuel() {
     if (activeVehIdx < 0) return;
     const ent = getEntity();
     if (!near(ent, GAS_STATION_POS, 150)) return;
-    
+
     const activeVehicle = getActiveVehicle();
     if (!activeVehicle) return;
 
@@ -3597,7 +3597,7 @@ async function doRefuel() {
         } else {
             console.log("Refuel falhou/negado:", d.message);
         }
-    } catch(e){
+    } catch (e) {
         console.error("Erro no refuel:", e);
     }
 }
@@ -3683,13 +3683,13 @@ function refreshStatusHUD() {
     if (!el) return;
     const veh = getActiveVehicle();
     if (!veh) { el.innerHTML = ''; return; }
-    
+
     const model = getVehicleModel(veh);
     const autoStatus = getAutoDriveStatus(veh);
     const autoColor = autoStatus === 'ACTIVE' ? '#2ecc71' : (autoStatus === 'READY' ? '#85c1ff' : '#95a5a6');
     const engineStatus = veh.engineOn ? '<span style="color:#2ecc71">Ligado</span>' : '<span style="color:#e74c3c">Desligado</span>';
     const clutchStatus = veh.clutchPressed ? '<span style="color:#f1c40f">Embreagem pressionada</span>' : '<span style="color:#95a5a6">Embreagem solta</span>';
-    
+
     let attachmentStatus = '<span style="color:#95a5a6">Sem ferramenta ativa</span>';
     if (veh.type === 'harvester') {
         attachmentStatus = veh.toolOn ? '<span style="color:#2ecc71">Plataforma ON</span>' : '<span style="color:#e74c3c">Plataforma OFF</span>';
@@ -3830,15 +3830,15 @@ function closePauseMenu() {
 
 function quitToMainMenu() {
     closePauseMenu();
-    
+
     // Desconectar se estiver em multiplayer
     if (socket) {
         socket.disconnect();
         socket = null;
     }
-    
+
     multiplayerMode = false;
-    
+
     // Esconder HUDs
     document.getElementById('hud').style.display = 'none';
     document.getElementById('dashboard').style.display = 'none';
@@ -3847,10 +3847,10 @@ function quitToMainMenu() {
     document.getElementById('ui-buttons-container').style.display = 'none';
     document.getElementById('ui-room-code').style.display = 'none';
     document.getElementById('chat-container').style.display = 'none';
-    
+
     // Mostrar Menu Inicial
     document.getElementById('main-menu').style.display = 'flex';
-    
+
     // Resetar estado local do jogador se necessário (opcional)
     // window.location.reload(); // Uma forma bruta mas eficaz de resetar tudo
 }
@@ -3864,12 +3864,12 @@ function startSoloMode() {
     document.getElementById('main-menu').style.display = 'none';
     document.getElementById('ui-room-code').style.display = 'none';
     document.getElementById('chat-container').style.display = 'none';
-    
+
     // Garantir que o HUD e controles estejam visíveis
     document.getElementById('hud').style.display = 'block';
     document.getElementById('minimap').style.display = 'block';
     document.getElementById('ui-buttons-container').style.display = 'flex';
-    
+
     console.log("Iniciando Modo Solo...");
 }
 
@@ -3891,19 +3891,31 @@ function backToMainMenu() {
 
 function initMultiplayer() {
     if (socket) return;
-    
-    socket = io(API || window.location.origin);
+
+    console.log("Iniciando conexão socket com:", API || window.location.origin);
+    socket = io(API || window.location.origin, {
+        transports: ['websocket'],
+        secure: true
+    });
 
     socket.on('connect', () => {
         console.log("Conectado ao servidor multiplayer! ID:", socket.id);
         socket.emit('requestRoomList');
-        setupChatListeners(); // Garantir que listeners estão prontos ao conectar
+        setupChatListeners();
+    });
+
+    socket.on('connect_error', (err) => {
+        console.error("Erro na conexão Socket.io:", err.message);
+    });
+
+    socket.on('disconnect', (reason) => {
+        console.log("Socket desconectado. Motivo:", reason);
     });
 
     socket.on('roomList', (rooms) => {
         const list = document.getElementById('lobby-rooms-list');
         if (!list) return;
-        
+
         if (rooms.length === 0) {
             list.innerHTML = '<div class="no-rooms">Nenhuma sala pública disponível</div>';
             return;
@@ -3925,7 +3937,7 @@ function initMultiplayer() {
             showToast(`Sala privada criada! Código: ${code}`, 'success');
             // Copiar código para área de transferência se possível
             navigator.clipboard.writeText(code).catch(e => e);
-            
+
             // Mostrar no HUD
             document.getElementById('ui-room-code').style.display = 'block';
             document.getElementById('ui-room-code-val').textContent = code;
@@ -3933,13 +3945,13 @@ function initMultiplayer() {
             document.getElementById('ui-room-code').style.display = 'block';
             document.getElementById('ui-room-code-val').textContent = 'PÚBLICA';
         }
-        
+
         // Mostrar UI do jogo
         document.getElementById('hud').style.display = 'block';
         document.getElementById('minimap').style.display = 'block';
         document.getElementById('ui-buttons-container').style.display = 'flex';
         document.getElementById('chat-container').style.display = 'flex';
-        
+
         document.getElementById('lobby-screen').style.display = 'none';
         multiplayerMode = true;
     });
@@ -3957,7 +3969,7 @@ function initMultiplayer() {
                 addOtherPlayer(id, players[id]);
             }
         });
-        
+
         // Se entramos por código, o código deve estar no input
         const codeInput = document.getElementById('lobby-join-code');
         if (codeInput && codeInput.value) {
@@ -3990,7 +4002,7 @@ function initMultiplayer() {
             op.sprite.setPosition(playerInfo.x, playerInfo.y);
             op.sprite.setRotation(playerInfo.angle);
             op.text.setPosition(playerInfo.x, playerInfo.y - 40);
-            
+
             // Se o jogador estiver em um veículo, esconda o sprite dele
             if (playerInfo.vehicleId) {
                 op.sprite.setVisible(false);
@@ -4064,7 +4076,7 @@ function addOtherPlayer(id, info) {
     console.log("Adicionando outro jogador:", id);
     const sprite = scene.add.sprite(info.x, info.y, 'p_down').setDepth(4);
     sprite.setTint(0x38bdf8); // Diferenciar outros jogadores com um tom azul
-    
+
     // Esconder se já estiver em um veículo
     if (info.vehicleId) sprite.setVisible(false);
 
@@ -4081,7 +4093,7 @@ function addMessageToChat(nick, msg, time, isSelf) {
 
     const div = document.createElement('div');
     div.className = 'chat-msg' + (isSelf ? ' self' : '');
-    
+
     div.innerHTML = `
         <span class="chat-msg-time">[${time}]</span>
         <span class="chat-msg-nick">${nick}:</span>
@@ -4100,7 +4112,7 @@ function setupChatListeners() {
         // Remover listeners antigos se houver (para evitar duplicatas em re-init)
         const newChatInput = chatInput.cloneNode(true);
         chatInput.parentNode.replaceChild(newChatInput, chatInput);
-        
+
         newChatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 const message = e.target.value.trim();
