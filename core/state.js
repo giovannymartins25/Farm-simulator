@@ -29,7 +29,8 @@ class GameState {
           { id: 'imp_3', modelId: 'seeder_small', isOn: false }
         ]
       },
-      unlockedLands: ['field_1']
+      unlockedLands: ['field_1'],
+      hasCellphone: false
     };
     this.counters = {
       vehicle: 4,

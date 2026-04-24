@@ -49,6 +49,7 @@
                 <div class="status-lamp" data-type="brake" id="lamp-brake" title="Freio / Espaco"></div>
                 <div class="status-lamp" data-type="stall" id="lamp-stall" title="Motor Morreu"></div>
                 <div class="dash-fuel" title="Combustivel (L)">Fuel <span id="dash-fuel-text">0 L</span></div>
+                <div class="dash-fuel" title="Tanque Móvel (L)" id="dash-fuel-tank" style="display: none;">Tanque <span id="dash-fuel-tank-text">0 L</span></div>
             </div>
         </div>
 
@@ -56,11 +57,70 @@
             <canvas id="minimap-canvas" width="200" height="200"></canvas>
         </div>
 
+<<<<<<< HEAD
         <div id="instructions">
             F -> entrar/sair do veiculo | Q -> interagir hambiente | C -> ligar/desligar motor<br>
             E -> acoplar/retirar implemento | L -> ligar/desligar implemento/plataforma<br>
             SHIFT -> embreagem | R/V -> marcha +/- | M -> mapa completo<br>
             G -> auto marcha on/off | H -> AUTO DRIVE  | SPACE -> freio | O -> abastecer no posto
+=======
+        <!-- Botões laterais acima do minimapa -->
+        <div id="ui-buttons-container">
+            <button id="btn-tutorial" onclick="openTutorialModal()">Tutorial</button>
+            <button id="btn-controls" onclick="openControlsModal()">Controles</button>
+        </div>
+
+        <!-- Modal de Controles -->
+        <div id="controls-modal" class="game-modal" style="display: none;">
+            <div class="modal-inner">
+                <div class="modal-header">
+                    <h2>Controles do Jogo</h2>
+                    <button class="modal-close" onclick="closeControlsModal()">X</button>
+                </div>
+                <div class="modal-content">
+                    <ul>
+                        <li><b>WASD</b> - Mover jogador / veículo</li>
+                        <li><b>F</b> - Entrar / Sair do veículo</li>
+                        <li><b>E</b> - Acoplar / Desacoplar implemento</li>
+                        <li><b>C</b> - Ligar / Desligar motor</li>
+                        <li><b>O</b> - Abastecer no posto (Segure para encher)</li>
+                        <li><b>L</b> - Ligar / Desligar implemento (Puxar/Plataforma)</li>
+                        <li><b>SHIFT</b> - Segurar embreagem (manual)</li>
+                        <li><b>R / V</b> - Subir / Descer marcha</li>
+                        <li><b>G</b> - Ligar / Desligar câmbio automático</li>
+                        <li><b>H</b> - Ligar / Desligar AUTO DRIVE</li>
+                        <li><b>N</b> - Mostrar/Esconder Monitor de Campo</li>
+                        <li><b>SPACE</b> - Freio</li>
+                        <li><b>Q</b> - Interagir / Transferir Combustível (Caminhão)</li>
+                        <li><b>M</b> - Abrir Mapa Completo</li>
+                        <li><b>Z</b> - Abrir Celular (Compre na loja)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Tutorial -->
+        <div id="tutorial-modal" class="game-modal" style="display: none;">
+            <div class="modal-inner">
+                <div class="modal-header">
+                    <h2>Passo a Passo da Fazenda</h2>
+                    <button class="modal-close" onclick="closeTutorialModal()">X</button>
+                </div>
+                <div class="modal-content tutorial-list">
+                    <div class="tut-step"><span>1</span> Compre um trator na loja (vá até o ícone amarelo e aperte Q ou clique no local).</div>
+                    <div class="tut-step"><span>2</span> Compre um implemento de preparo (ex: Tombador/Arado).</div>
+                    <div class="tut-step"><span>3</span> Aproxime o trator do implemento e aperte <b>E</b> para engatar.</div>
+                    <div class="tut-step"><span>4</span> Aperte <b>C</b> para ligar o motor do trator.</div>
+                    <div class="tut-step"><span>5</span> Dirija até a área verde (campo desbloqueado).</div>
+                    <div class="tut-step"><span>6</span> Aperte <b>L</b> para ligar o implemento e arar a terra.</div>
+                    <div class="tut-step"><span>7</span> Troque o implemento para um Gradão e grade a terra arada.</div>
+                    <div class="tut-step"><span>8</span> Troque para uma Plantadeira, compre sementes na loja, encha a plantadeira e plante na terra gradeada.</div>
+                    <div class="tut-step"><span>9</span> Espere a colheita crescer (cor amarela indica que está pronta).</div>
+                    <div class="tut-step"><span>10</span> Use a Colheitadeira (ligue a plataforma com <b>L</b>) para colher.</div>
+                    <div class="tut-step"><span>11</span> Descarregue no Silo, e use um caminhão para vender na cidade!</div>
+                </div>
+            </div>
+>>>>>>> 970508e (add)
         </div>
 
         <div id="shop-modal">
@@ -73,23 +133,28 @@
                     <button class="shop-tab active" id="tab-vehicles" onclick="switchTab('vehicles')">Veiculos</button>
                     <button class="shop-tab" id="tab-implements" onclick="switchTab('implements')">Implementos</button>
                     <button class="shop-tab" id="tab-seeds" onclick="switchTab('seeds')">Sementes</button>
+                    <button class="shop-tab" id="tab-items" onclick="switchTab('items')">Itens</button>
                     <button class="shop-tab" id="tab-lands" onclick="switchTab('lands')">Terras</button>
+                    <button class="shop-tab" id="tab-sell" onclick="switchTab('sell')" style="background-color: #e74c3c;">Venda</button>
                 </div>
                 <div id="shop-content"></div>
             </div>
         </div>
 
-        <div id="sell-modal">
-            <div id="sell-inner">
-                <div class="shop-header">
-                    <h2>Venda de Equipamentos</h2>
-                    <button class="shop-close" onclick="closeSellMenu()">X</button>
+        <div id="cellphone-modal">
+            <div id="cellphone-inner">
+                <div class="cellphone-header">
+                    <h2>FarmApp</h2>
+                    <button class="cellphone-close" onclick="closeCellphone()">X</button>
                 </div>
-                <div class="shop-tabs">
-                    <button class="shop-tab active" onclick="renderSellMenu('vehicles')">Veiculos</button>
-                    <button class="shop-tab" onclick="renderSellMenu('implements')">Implementos</button>
+                <div class="cellphone-balance">Saldo: $<span id="cellphone-money">0</span></div>
+                <div class="cellphone-tabs">
+                    <button class="cellphone-tab active" onclick="renderCellphoneMenu('vehicles')">Comprar Veíc.</button>
+                    <button class="cellphone-tab" onclick="renderCellphoneMenu('implements')">Comprar Impl.</button>
+                    <button class="cellphone-tab" onclick="renderCellphoneMenu('seeds')">Sementes</button>
+                    <button class="cellphone-tab" onclick="renderCellphoneMenu('sell')">Vender</button>
                 </div>
-                <div id="sell-content"></div>
+                <div id="cellphone-content"></div>
             </div>
         </div>
 

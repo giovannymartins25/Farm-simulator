@@ -44,6 +44,9 @@ const LOCAL_CATALOG = {
         seed_25: { name: '25 Sementes', amount: 25, price: 65 },
         seed_50: { name: '50 Sementes', amount: 50, price: 110 }
     },
+    items: {
+        cellphone: { name: 'Celular Smartphone', type: 'item', price: 500 }
+    },
     lands: {
         field_1: { name: 'Vale Esmeralda', x: 5000, y: 6000, w: 1000, h: 800, price: 0 },
         field_2: { name: 'Colinas do Sol', x: 6200, y: 6000, w: 1200, h: 800, price: 15000 },
@@ -92,7 +95,8 @@ function createDefaultLocalState() {
                     { id: 'imp_3', modelId: 'seeder_small', isOn: false }
                 ]
             },
-            unlockedLands: ['field_1']
+            unlockedLands: ['field_1'],
+            hasCellphone: false
         }
     };
 }
@@ -113,6 +117,7 @@ function normalizeState(state) {
     if (!state.farm.soil) state.farm.soil = {};
     if (!Array.isArray(state.farm.plantedCrops)) state.farm.plantedCrops = [];
     if (!Array.isArray(state.farm.unlockedLands)) state.farm.unlockedLands = ['field_1'];
+    if (state.farm.hasCellphone === undefined) state.farm.hasCellphone = false;
     state.economy = state.economy || { pricePerCrop: 10, totalMarketDemand: 50 };
     state.weather = state.weather || 'Ensolarado';
     state.time = state.time || 0;
@@ -324,6 +329,15 @@ function handleLocalApi(path, options = {}) {
             normalizeState(state);
             return { success: true };
         }
+        if (category === 'items') {
+            const item = LOCAL_CATALOG.items[itemId];
+            if (!item || state.farm.money < item.price) return { success: false, message: 'Compra indisponivel' };
+            if (itemId === 'cellphone' && state.farm.hasCellphone) return { success: false, message: 'Ja possui' };
+            state.farm.money -= item.price;
+            if (itemId === 'cellphone') state.farm.hasCellphone = true;
+            normalizeState(state);
+            return { success: true };
+        }
         return { success: false, message: 'Categoria invalida' };
     }
 
@@ -511,7 +525,7 @@ const AUTO_DRIVE_MIN_SPEED = 0.05;
 const AUTO_DRIVE_SPEED_LOSS_LIMIT = 45;
 const AUTO_DRIVE_LANE_TOLERANCE = 6;
 const AUTO_DRIVE_RECOVERY_CHECK_FRAMES = 120;
-const AUTO_DRIVE_RECOVERY_MIN_MOVE = 5;
+const AUTO_DRIVE_RECOVERY_MIN_MOVE = 10;
 const AUTO_DRIVE_RECOVERY_MAX_ATTEMPTS = 3;
 const AUTO_DRIVE_RECENT_TARGET_LIMIT = 6;
 
@@ -525,6 +539,7 @@ let isHydrated = false;
 let currentHour = 0;
 let shopOpen = false;
 let shopTab = 'vehicles';
+let monitorVisible = false;
 let vehicleSelectionIdx = 0; // Índice do veículo "selecionado" para cycling
 let landBordersGfx;
 let gpsGuideGfx;
@@ -662,6 +677,7 @@ function create() {
         left: Phaser.Input.Keyboard.KeyCodes.LEFT,
         right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
         m: Phaser.Input.Keyboard.KeyCodes.M,
+        n: Phaser.Input.Keyboard.KeyCodes.N,
         z: Phaser.Input.Keyboard.KeyCodes.Z,
         o: Phaser.Input.Keyboard.KeyCodes.O
     });
@@ -679,8 +695,9 @@ function create() {
     keys.left.on('down', () => cycleVehicles(-1, this));
     keys.right.on('down', () => cycleVehicles(1, this));
     keys.m.on('down', toggleFullMap);
-    keys.z.on('down', openSellMenu);
-    keys.o.on('down', doRefuel, this);
+    keys.n.on('down', () => { monitorVisible = !monitorVisible; });
+    keys.z.on('down', toggleCellphone);
+    // Removemos doRefuel em on('down') pois será contínuo no update()
     this.input.keyboard.disableGlobalCapture();
 
     this.time.addEvent({ delay: 20000, callback: advanceHour, callbackScope: this, loop: true });
@@ -897,29 +914,11 @@ function findPendingWorkTile(veh, land, jobType) {
         const endX = startX + land.w;
         const endY = startY + land.h;
 
-        const fieldCrops = (lastState?.farm?.plantedCrops || []).filter(c => 
-            c.x >= land.x && c.x < land.x + land.w && c.y >= land.y && c.y < land.y + land.h
-        );
-
         for (let y = startY; y < endY; y += TILE) {
             for (let x = startX; x < endX; x += TILE) {
-                const soilKey = `${x},${y}`;
-                const info = lastState?.farm?.soil?.[soilKey];
-                const st = typeof info === 'object' ? info.state : info;
-                
-                let isPending = false;
-                if (jobType === 'plow') {
-                    if (st !== 'plowed' && st !== 'planted') isPending = true;
-                } else if (jobType === 'harrow') {
-                    if (st === 'plowed') isPending = true;
-                } else if (jobType === 'seeder') {
-                    if (st === 'harrowed') isPending = true;
-                } else if (jobType === 'harvest') {
-                    if (st === 'planted') {
-                        const crop = fieldCrops.find(c => Math.abs(c.x - x) < 5 && Math.abs(c.y - y) < 5);
-                        if (crop && crop.isReady) isPending = true;
-                    }
-                }
+                // Ao invés de re-verificar regras de crop, usamos shouldWorkTile para a fonte de verdade
+                // (isso garante que o estado do solo seja respeitado exatamente como na engine)
+                const isPending = shouldWorkTile(veh, x, y);
                 
                 if (isPending) {
                     tiles.push({ x: x + TILE/2, y: y + TILE/2 });
@@ -1270,11 +1269,11 @@ function updateAutoDriveRoute(veh) {
 
     const field = state.field;
     const axis = state.axis;
+    // Usar os limites absolutos do campo
     const forwardBounds = axis === 'horizontal'
-        ? { min: field.x + TILE / 2, max: field.x + field.w - TILE / 2 }
-        : { min: field.y + TILE / 2, max: field.y + field.h - TILE / 2 };
+        ? { min: field.x, max: field.x + field.w }
+        : { min: field.y, max: field.y + field.h };
 
-    // 2. Lógica Simplificada: Se chegou ao fim da linha, busca próxima área via RECOVERY
     if (state.turnPhase === 'straight') {
         const forwardValue = axis === 'horizontal' ? veh.sprite.x : veh.sprite.y;
         const movingPositive = axis === 'horizontal'
@@ -1283,16 +1282,44 @@ function updateAutoDriveRoute(veh) {
             
         const remaining = movingPositive ? forwardBounds.max - forwardValue : forwardValue - forwardBounds.min;
 
-        // Detecta fim da linha
-        if (remaining <= TILE * 0.5) {
+        // Detecta fim da linha com margem menor (0.2) e verificação de limite do campo
+        if (remaining <= TILE * 0.2) {
             console.log('[AUTODRIVE] Fim da linha detectado, acionando fallback/navegação');
             triggerAutoDriveFallback(veh);
             return;
         }
-    } 
-    // Fases antigas (turn1, shift, turn2) removidas em favor do RECOVERY direto.
-}
 
+        // Lookahead: verificar os próximos 3 a 5 tiles para ver se há trabalho na linha atual
+        const stepDir = movingPositive ? TILE : -TILE;
+        let hasWorkAhead = false;
+        
+        for (let i = 1; i <= 4; i++) {
+            const checkX = axis === 'horizontal' ? veh.sprite.x + (stepDir * i) : veh.sprite.x;
+            const checkY = axis === 'vertical' ? veh.sprite.y + (stepDir * i) : veh.sprite.y;
+            
+            // Verifica se está dentro do campo ainda
+            if (checkX < field.x || checkX > field.x + field.w || checkY < field.y || checkY > field.y + field.h) {
+                break;
+            }
+            
+            // Arredonda para alinhar com o grid do solo
+            const tx = Math.floor(checkX / TILE) * TILE;
+            const ty = Math.floor(checkY / TILE) * TILE;
+            
+            if (shouldWorkTile(veh, tx, ty)) {
+                hasWorkAhead = true;
+                break;
+            }
+        }
+        
+        // Se não encontrou nenhum trabalho à frente nesta linha, pula para o próximo target (recovery)
+        if (!hasWorkAhead) {
+            console.log('[AUTODRIVE] Linha atual vazia à frente, pulando para a próxima faixa...');
+            triggerAutoDriveFallback(veh);
+            return;
+        }
+    } 
+}
 function getAutoDriveTargetAngle(veh) {
     if (!veh.autoDriveEnabled || !veh.autoDriveState) return veh.angle;
     return veh.autoDriveState.heading;
@@ -1577,8 +1604,8 @@ function runRecoveryLogic(veh) {
         return;
     }
 
-    const baseTurnSpeed = m.turnSpeedBase || 0.10;
-    veh.angle = rotateAngleToward(veh.angle, targetAngle, baseTurnSpeed);
+    // No modo recovery, girar muito rápido ou diretamente para o alvo para evitar andar em círculos
+    veh.angle = rotateAngleToward(veh.angle, targetAngle, 0.5); // Giro rápido
     veh.angle = normalizeAngle(veh.angle);
 
     const maxSpeed = m.speed;
@@ -1935,6 +1962,8 @@ function update() {
         // No vehicle active, HUD handles this
     }
 
+    handleContinuousActions();
+
     // 3. Visuals that depend on overall state
     renderMiniMap();
     renderGpsGuides();
@@ -1958,6 +1987,64 @@ function update() {
         }
     });
 
+}
+
+function handleContinuousActions() {
+    if (!lastState) return;
+    const veh = getActiveVehicle();
+    if (!veh) return;
+
+    // Abastecimento no Posto (O)
+    if (keys.o.isDown && near(veh.sprite, GAS_STATION_POS, 100)) {
+        const m = getVehicleModel(veh);
+        const mainCap = m?.fuelCapacity || 100;
+        
+        // Prioridade 1: Tanque principal
+        if (veh.fuel < mainCap) {
+            veh.fuel += 2;
+            if (veh.fuel > mainCap) veh.fuel = mainCap;
+            
+            if (!veh._lastRefuelReq || Date.now() - veh._lastRefuelReq > 500) {
+                apiJson('/action/refuel', { method: 'POST', body: JSON.stringify({ amount: 2 }) }).catch(e=>e);
+                veh._lastRefuelReq = Date.now();
+            }
+        } 
+        // Prioridade 2: Tanque de carga (apenas para caminhão)
+        else if (veh.type === 'truck') {
+            const tankCap = m.tankCapacity || 1000;
+            if (!veh.fuelTank) veh.fuelTank = 0;
+            
+            if (veh.fuelTank < tankCap) {
+                veh.fuelTank += 5;
+                if (veh.fuelTank > tankCap) veh.fuelTank = tankCap;
+                
+                if (!veh._lastRefuelReq || Date.now() - veh._lastRefuelReq > 500) {
+                    apiJson('/action/refuel', { method: 'POST', body: JSON.stringify({ amount: 5 }) }).catch(e=>e);
+                    veh._lastRefuelReq = Date.now();
+                }
+            }
+        }
+        updateDashboard();
+    }
+
+    // Transferência Caminhão -> Veículo (Q)
+    if (keys.q.isDown && veh.type === 'truck' && veh.fuelTank > 0) {
+        for (const target of vehicleSprites) {
+            if (target.id === veh.id) continue;
+            if (near(veh.sprite, target.sprite, 100)) {
+                const tCap = getVehicleModel(target)?.fuelCapacity || 100;
+                if (target.fuel < tCap) {
+                    target.fuel += 1;
+                    veh.fuelTank -= 1;
+                    if (target.fuel > tCap) {
+                        veh.fuelTank += (target.fuel - tCap); // Devolve o excesso
+                        target.fuel = tCap;
+                    }
+                    if (target.id === activeVehIdx || veh.id === activeVehIdx) updateDashboard();
+                }
+            }
+        }
+    }
 }
 
 // ============================================================
@@ -2088,7 +2175,7 @@ function shouldWorkTile(veh, tx, ty) {
     if (!model) return false;
     
     const type = model.type;
-    if (type === 'plow') return st === 'normal';
+    if (type === 'plow') return st !== 'plowed';
     if (type === 'harrow') return st === 'plowed';
     if (type === 'seeder') return st === 'harrowed';
     
@@ -2178,6 +2265,7 @@ function ensureVehicles() {
                 clutchPressed: false,
                 toolOn: false,
                 fuel: veh.fuel || model.fuelCapacity || 100,
+                fuelTank: model.type === 'truck' ? (veh.fuelTank || model.tankCapacity || 1000) : 0,
                 // Full physics state per vehicle
                 velocity: 0,
                 rpm: 0,
@@ -2763,8 +2851,8 @@ function renderFieldMonitor() {
     const veh = getActiveVehicle();
     const model = getVehicleModel(veh);
     
-    // Visibilidade estrita: 6 marchas + autodrive
-    const shouldShow = veh && model && model.gears === 6 && model.autoDrive;
+    // Visibilidade estrita: 6 marchas + autodrive + monitorVisible
+    const shouldShow = veh && model && model.gears === 6 && model.autoDrive && monitorVisible;
     
     if (!shouldShow) {
         monDiv.style.display = 'none';
@@ -3023,8 +3111,138 @@ async function doContextAction() {
 }
 
 // ============================================================
-//  SHOP UI
+//  SHOP & CELLPHONE UI
 // ============================================================
+let cellphoneOpen = false;
+
+function toggleCellphone() {
+    if (!lastState || !lastState.farm.hasCellphone) {
+        showToast('Você precisa comprar um celular na loja primeiro!', 'error');
+        return;
+    }
+    if (cellphoneOpen) {
+        closeCellphone();
+    } else {
+        openCellphone();
+    }
+}
+
+function openCellphone() {
+    cellphoneOpen = true;
+    shopOpen = true; // Blocks game controls
+    const modal = document.getElementById('cellphone-modal');
+    if (modal) modal.style.display = 'flex';
+    document.getElementById('cellphone-money').innerText = lastState?.farm?.money || 0;
+    renderCellphoneMenu('vehicles');
+}
+
+function closeCellphone() {
+    cellphoneOpen = false;
+    shopOpen = false;
+    const modal = document.getElementById('cellphone-modal');
+    if (modal) modal.style.display = 'none';
+    fetchState();
+}
+
+function renderCellphoneMenu(cat) {
+    if (!catalog || !lastState) return;
+    const cont = document.getElementById('cellphone-content');
+    const tabs = document.querySelectorAll('.cellphone-tab');
+    tabs.forEach(t => t.classList.remove('active'));
+    if (cat === 'vehicles') tabs[0].classList.add('active');
+    else if (cat === 'implements') tabs[1].classList.add('active');
+    else if (cat === 'seeds') tabs[2].classList.add('active');
+    else if (cat === 'sell') tabs[3].classList.add('active');
+
+    document.getElementById('cellphone-money').innerText = lastState.farm.money;
+
+    let html = '';
+    const inv = lastState.farm.inventory;
+
+    if (cat === 'vehicles') {
+        for (const [id, it] of Object.entries(catalog.vehicles)) {
+            const afford = lastState.farm.money >= it.price;
+            html += `<div class="cp-item">
+                <div class="cp-name">${it.name}</div>
+                <div class="cp-price">$${it.price}</div>
+                <button class="cp-btn-buy" onclick="buyCellphoneItem('vehicles','${id}')" ${!afford ? 'disabled' : ''}>Comprar</button>
+            </div>`;
+        }
+    } else if (cat === 'implements') {
+        for (const [id, it] of Object.entries(catalog.implements)) {
+            const afford = lastState.farm.money >= it.price;
+            html += `<div class="cp-item">
+                <div class="cp-name">${it.name}</div>
+                <div class="cp-price">$${it.price}</div>
+                <button class="cp-btn-buy" onclick="buyCellphoneItem('implements','${id}')" ${!afford ? 'disabled' : ''}>Comprar</button>
+            </div>`;
+        }
+    } else if (cat === 'seeds') {
+        for (const [id, it] of Object.entries(catalog.seeds)) {
+            const afford = lastState.farm.money >= it.price;
+            html += `<div class="cp-item">
+                <div class="cp-name">🌱 ${it.name}</div>
+                <div class="cp-price">$${it.price}</div>
+                <button class="cp-btn-buy" onclick="buyCellphoneItem('seeds','${id}')" ${!afford ? 'disabled' : ''}>Comprar</button>
+            </div>`;
+        }
+    } else if (cat === 'sell') {
+        const hitchedIds = new Set(implementSprites.filter(i => i.hitchedTo).map(i => i.id));
+        
+        inv.vehicles.forEach(v => {
+            const it = catalog.vehicles[v.modelId];
+            if (!it) return;
+            const refund = Math.floor(it.price * 0.8);
+            html += `<div class="cp-item">
+                <div class="cp-name">${it.name} (V)</div>
+                <div class="cp-price">Receber: $${refund}</div>
+                <button class="cp-btn-sell" onclick="sellCellphoneItem('vehicles','${v.id}')">Vender</button>
+            </div>`;
+        });
+        inv.implements.forEach(i => {
+            const it = catalog.implements[i.modelId];
+            if (!it) return;
+            const isHitched = hitchedIds.has(i.id);
+            const refund = Math.floor(it.price * 0.8);
+            html += `<div class="cp-item">
+                <div class="cp-name">${it.name} (I)</div>
+                <div class="cp-price">Receber: $${refund}</div>
+                <button class="cp-btn-sell" onclick="sellCellphoneItem('implements','${i.id}')" ${isHitched ? 'disabled' : ''}>${isHitched ? 'ENGATADO' : 'Vender'}</button>
+            </div>`;
+        });
+        if (inv.vehicles.length === 0 && inv.implements.length === 0) {
+            html += '<div style="color:#94a3b8; text-align:center; padding: 20px;">Inventário vazio.</div>';
+        }
+    }
+    cont.innerHTML = html;
+}
+
+async function buyCellphoneItem(cat, id) {
+    try {
+        const d = await apiJson('/shop/buy', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: cat, itemId: id })
+        });
+        if (d.success) { await fetchState(); renderCellphoneMenu(cat); ensureVehicles(); ensureImplements(); }
+    } catch (e) { }
+}
+
+async function sellCellphoneItem(cat, id) {
+    if (cat === 'implements') {
+        const isHitched = implementSprites.some(i => i.id === id && i.hitchedTo);
+        if (isHitched) {
+            showToast('Desengate o implemento antes de vender', 'error');
+            return;
+        }
+    }
+    try {
+        const d = await apiJson('/shop/sell', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: cat, itemId: id })
+        });
+        if (d.success) { await fetchState(); renderCellphoneMenu('sell'); ensureVehicles(); ensureImplements(); }
+    } catch (e) { }
+}
 function openShop() {
     shopOpen = true;
     document.getElementById('shop-modal').style.display = 'flex';
@@ -3049,43 +3267,51 @@ function renderShop(cat) {
     let html = '';
 
     if (cat === 'vehicles') {
+        const types = ['tractor', 'harvester', 'truck'];
+        const typeNames = { 'tractor': 'Tratores', 'harvester': 'Colheitadeiras', 'truck': 'Caminhões' };
         const vehicleCounts = {};
-        inv.vehicles.forEach(v => {
-            vehicleCounts[v.modelId] = (vehicleCounts[v.modelId] || 0) + 1;
+        inv.vehicles.forEach(v => { vehicleCounts[v.modelId] = (vehicleCounts[v.modelId] || 0) + 1; });
+
+        types.forEach(type => {
+            let sectionHtml = `<div class="shop-category-title">${typeNames[type]}</div>`;
+            let hasItems = false;
+            for (const [id, it] of Object.entries(catalog.vehicles)) {
+                if (it.type !== type) continue;
+                hasItems = true;
+                const afford = lastState.farm.money >= it.price;
+                const trans = it.gearType === 'auto' ? 'A' : 'M';
+                const stat = type === 'tractor'
+                    ? `<span>HP: <b>${it.hp}</b></span> <span>Marchas: <b>${trans}${it.gears}</b></span>`
+                    : `<span>Cap: <b>${it.capacity}L</b></span> <span>HP: <b>${it.hp}</b></span> <span>Marchas: <b>${trans}${it.gears}</b></span>`;
+                const qty = vehicleCounts[id] || 0;
+                
+                sectionHtml += `<div class="shop-item">
+                    ${it.autoDrive ? '<div class="si-autodrive">AUTODRIVE</div>' : ''}
+                    <div class="si-brand">${it.brand}</div>
+                    <div class="si-name">${it.name}</div>
+                    <div class="si-stats">${stat}</div>
+                    <div class="si-price">${it.price > 0 ? '$' + it.price : 'Grátis'}</div>
+                    <div class="si-stats" style="text-align:center;">Na Fazenda: ${qty}</div>
+                    <button onclick="buyItem('vehicles','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>
+                </div>`;
+            }
+            if (hasItems) html += sectionHtml;
         });
-        for (const [id, it] of Object.entries(catalog.vehicles)) {
-            const afford = lastState.farm.money >= it.price;
-            const trans = it.gearType === 'auto' ? 'A' : 'M';
-            const autoDriveTag = it.autoDrive ? 'AUTO' : 'STD';
-            const stat = it.type === 'tractor'
-                ? `${it.hp}HP | Vel ${it.speed} | ${trans}${it.gears} | ${autoDriveTag}`
-                : `Cap ${it.capacity} | Vel ${it.speed} | ${trans}${it.gears} | ${autoDriveTag}`;
-            const qty = vehicleCounts[id] || 0;
-            html += `<div class="shop-item">
-                <div class="si-brand">${it.brand}</div>
-                <div class="si-name">${it.name}</div>
-                <div class="si-stats">${stat}</div>
-                <div class="si-price">${it.price > 0 ? '$' + it.price : 'Grátis'}</div>
-                <div class="si-stats">Qtd: ${qty}</div>
-                <button onclick="buyItem('vehicles','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>
-            </div>`;
-        }
     } else if (cat === 'implements') {
         const implementCounts = {};
-        inv.implements.forEach(i => {
-            implementCounts[i.modelId] = (implementCounts[i.modelId] || 0) + 1;
-        });
+        inv.implements.forEach(i => { implementCounts[i.modelId] = (implementCounts[i.modelId] || 0) + 1; });
         for (const [id, it] of Object.entries(catalog.implements)) {
             const afford = lastState.farm.money >= it.price;
-            let stat = `${it.requiredHp}HP req | Larg ${it.width}`;
-            if (it.capacity) stat += ` | Cap ${it.capacity}`;
-            if (it.lines) stat += ` | ${it.lines}L`;
+            let stat = `<span>Requisito: <b>${it.requiredHp}HP</b></span> <span>Largura: <b>${it.width}</b></span>`;
+            if (it.capacity) stat += `<span>Capacidade: <b>${it.capacity}</b></span>`;
+            if (it.lines) stat += `<span>Linhas: <b>${it.lines}L</b></span>`;
             const qty = implementCounts[id] || 0;
             html += `<div class="shop-item">
+                <div class="si-brand">IMPLEMENTO</div>
                 <div class="si-name">${it.name}</div>
                 <div class="si-stats">${stat}</div>
                 <div class="si-price">${it.price > 0 ? '$' + it.price : 'Grátis'}</div>
-                <div class="si-stats">Qtd: ${qty}</div>
+                <div class="si-stats" style="text-align:center;">Na Fazenda: ${qty}</div>
                 <button onclick="buyItem('implements','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>
             </div>`;
         }
@@ -3094,23 +3320,76 @@ function renderShop(cat) {
             const afford = lastState.farm.money >= it.price;
             html += `<div class="shop-item">
                 <div class="si-name">🌱 ${it.name}</div>
-                <div class="si-stats">Depósito</div>
+                <div class="si-stats"><span>Tipo</span> <span>Sementes</span></div>
                 <div class="si-price">$${it.price}</div>
                 <button onclick="buyItem('seeds','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>
             </div>`;
         }
-        html += `<div class="shop-info">Depósito: ${lastState.farm.seedDepot} sementes</div>`;
+        html += `<div class="shop-info">Sementes no Silo da Casa: <b>${lastState.farm.seedDepot}</b></div>`;
+    } else if (cat === 'items') {
+        for (const [id, it] of Object.entries(catalog.items || {})) {
+            const owned = id === 'cellphone' ? lastState.farm.hasCellphone : false;
+            if (owned) continue; // Desaparece se já possui
+
+            const afford = lastState.farm.money >= it.price;
+            html += `<div class="shop-item">
+                <div class="si-brand">ELETRÔNICOS</div>
+                <div class="si-name">📱 ${it.name}</div>
+                <div class="si-stats"><span>Utilidade</span> <span>Acesso Remoto</span></div>
+                <div class="si-price">$${it.price}</div>
+                <button onclick="buyItem('items','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>
+            </div>`;
+        }
     } else if (cat === 'lands') {
         for (const [id, it] of Object.entries(catalog.lands)) {
             const owned = lastState.farm.unlockedLands.includes(id);
             const afford = lastState.farm.money >= it.price;
             html += `<div class="shop-item ${owned ? 'owned' : ''}">
                 <div class="si-name">🗺️ ${it.name}</div>
-                <div class="si-stats">${it.w / TILE}x${it.h / TILE} tiles</div>
+                <div class="si-stats"><span>Área</span> <span>${it.w / TILE}x${it.h / TILE} tiles</span></div>
                 <div class="si-price">${it.price > 0 ? '$' + it.price : 'Grátis'}</div>
-                ${owned ? '<span class="si-owned">✓</span>' :
+                ${owned ? '<span class="si-owned">✓ Possui</span>' :
                     `<button onclick="buyItem('lands','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>`}
             </div>`;
+        }
+    } else if (cat === 'sell') {
+        html += `<div class="shop-category-title" style="color:#e74c3c; border-color:#e74c3c;">Vender Veículos</div>`;
+        if (inv.vehicles.length === 0) {
+            html += '<div class="shop-info">Você não possui veículos para vender.</div>';
+        } else {
+            for (const vehicle of inv.vehicles) {
+                const it = catalog.vehicles[vehicle.modelId];
+                if (!it) continue;
+                const refund = Math.floor(it.price * 0.8);
+                html += `<div class="shop-item">
+                    <div class="si-brand">${it.brand}</div>
+                    <div class="si-name">${it.name}</div>
+                    <div class="si-stats"><span>ID:</span> <span>${vehicle.id}</span></div>
+                    <div class="si-price">💰 $${refund} (80%)</div>
+                    <button class="btn-sell" onclick="sellItem('vehicles','${vehicle.id}')">Vender</button>
+                </div>`;
+            }
+        }
+        
+        html += `<div class="shop-category-title" style="color:#e74c3c; border-color:#e74c3c; margin-top:20px;">Vender Implementos</div>`;
+        if (inv.implements.length === 0) {
+            html += '<div class="shop-info">Você não possui implementos para vender.</div>';
+        } else {
+            // Verificar quais implementos estão engatados agora na simulação local
+            const hitchedIds = new Set(implementSprites.filter(i => i.hitchedTo).map(i => i.id));
+            
+            for (const implement of inv.implements) {
+                const it = catalog.implements[implement.modelId];
+                if (!it) continue;
+                const isHitched = hitchedIds.has(implement.id);
+                const refund = Math.floor(it.price * 0.8);
+                html += `<div class="shop-item">
+                    <div class="si-name">${it.name}</div>
+                    <div class="si-stats"><span>ID:</span> <span>${implement.id}</span></div>
+                    <div class="si-price">💰 $${refund} (80%)</div>
+                    <button class="btn-sell" onclick="sellItem('implements','${implement.id}')" ${isHitched ? 'disabled title="Desengate o implemento antes de vender"' : ''}>${isHitched ? 'ENGATADO' : 'Vender'}</button>
+                </div>`;
+            }
         }
     }
     cont.innerHTML = html;
@@ -3122,64 +3401,26 @@ async function buyItem(cat, id) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ category: cat, itemId: id })
         });
-        if (d.success) { await fetchState(); renderShop(shopTab); ensureVehicles(); ensureImplements(); }
+        if (d.success) { 
+            await fetchState(); 
+            renderShop(shopTab); 
+            ensureVehicles(); 
+            ensureImplements(); 
+            if (cat === 'items' && id === 'cellphone') {
+                showToast('Celular comprado! Aperte Z para acessar a Loja Rápida.', 'success');
+            }
+        }
     } catch (e) { }
 }
 
-function renderSellMenu(cat) {
-    if (!catalog || !lastState) return;
-    const cont = document.getElementById('sell-content');
-    const inv = lastState.farm.inventory;
-    let html = '';
-
-    if (cat === 'vehicles') {
-        if (inv.vehicles.length === 0) {
-            html = '<p style="color: #999;">Você não possui nenhum veículo para vender.</p>';
-        } else {
-            for (const vehicle of inv.vehicles) {
-                const it = catalog.vehicles[vehicle.modelId];
-                if (!it) continue;
-                const refund = Math.floor(it.price * 0.8); // 80% do preço
-                const trans = it.gearType === 'auto' ? 'A' : 'M';
-                const autoDriveTag = it.autoDrive ? 'AUTO' : 'STD';
-                const stat = it.type === 'tractor'
-                    ? `${it.hp}HP | Vel ${it.speed} | ${trans}${it.gears} | ${autoDriveTag}`
-                    : `Cap ${it.capacity} | Vel ${it.speed} | ${trans}${it.gears} | ${autoDriveTag}`;
-                html += `<div class="shop-item">
-                    <div class="si-brand">${it.brand}</div>
-                    <div class="si-name">${it.name}</div>
-                    <div class="si-stats">${stat}</div>
-                    <div class="si-stats">ID: ${vehicle.id}</div>
-                    <div class="si-price">💰 $${refund} (80%)</div>
-                    <button onclick="sellItem('vehicles','${vehicle.id}')">Vender</button>
-                </div>`;
-            }
-        }
-    } else if (cat === 'implements') {
-        if (inv.implements.length === 0) {
-            html = '<p style="color: #999;">Você não possui nenhum implemento para vender.</p>';
-        } else {
-            for (const implement of inv.implements) {
-                const it = catalog.implements[implement.modelId];
-                if (!it) continue;
-                const refund = Math.floor(it.price * 0.8);
-                let stat = `${it.requiredHp}HP req | Larg ${it.width}`;
-                if (it.capacity) stat += ` | Cap ${it.capacity}`;
-                if (it.lines) stat += ` | ${it.lines}L`;
-                html += `<div class="shop-item">
-                    <div class="si-name">${it.name}</div>
-                    <div class="si-stats">${stat}</div>
-                    <div class="si-stats">ID: ${implement.id}</div>
-                    <div class="si-price">💰 $${refund} (80%)</div>
-                    <button onclick="sellItem('implements','${implement.id}')">Vender</button>
-                </div>`;
-            }
+async function sellItem(cat, id) {
+    if (cat === 'implements') {
+        const isHitched = implementSprites.some(i => i.id === id && i.hitchedTo);
+        if (isHitched) {
+            showToast('Desengate o implemento antes de vender', 'error');
+            return;
         }
     }
-    cont.innerHTML = html;
-}
-
-async function sellItem(cat, id) {
     try {
         const d = await apiJson('/shop/sell', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3187,7 +3428,7 @@ async function sellItem(cat, id) {
         });
         if (d.success) {
             await fetchState();
-            renderSellMenu(cat);
+            renderShop('sell');
             ensureVehicles();
             ensureImplements();
             updateHUD(lastState);
@@ -3199,10 +3440,7 @@ async function sellItem(cat, id) {
     }
 }
 
-function closeSellMenu() {
-    const sellModal = document.getElementById('sell-modal');
-    if (sellModal) sellModal.style.display = 'none';
-}
+
 
 // ============================================================
 //  TIME
@@ -3221,6 +3459,8 @@ async function fetchCatalog() {
         const data = await apiJson('/shop/catalog');
         if (data && data.vehicles) {
             catalog = data;
+            // Garantir que items do LOCAL_CATALOG sempre existam no catálogo
+            if (!catalog.items) catalog.items = LOCAL_CATALOG.items;
             console.log("Catálogo carregado com sucesso.");
         }
     } catch (e) {
@@ -3315,6 +3555,17 @@ function updateDashboard() {
     const fuelText = document.getElementById('dash-fuel-text');
     if (fuelText) {
         fuelText.innerText = Math.floor(veh.fuel || 0) + ' L';
+    }
+
+    const fuelTankDiv = document.getElementById('dash-fuel-tank');
+    const fuelTankText = document.getElementById('dash-fuel-tank-text');
+    if (fuelTankDiv && fuelTankText) {
+        if (veh.type === 'truck') {
+            fuelTankDiv.style.display = 'block';
+            fuelTankText.innerText = Math.floor(veh.fuelTank || 0) + ' L';
+        } else {
+            fuelTankDiv.style.display = 'none';
+        }
     }
 
     document.getElementById('lamp-engine').classList.toggle('active', veh.engineOn);
@@ -3462,3 +3713,26 @@ window.closeShop = closeShop;
 window.closeSellMenu = closeSellMenu;
 window.renderSellMenu = renderSellMenu;
 window.toggleFullMap = toggleFullMap;
+
+// UI Modals
+function openTutorialModal() {
+    const el = document.getElementById('tutorial-modal');
+    if (el) el.style.display = 'flex';
+}
+function closeTutorialModal() {
+    const el = document.getElementById('tutorial-modal');
+    if (el) el.style.display = 'none';
+}
+function openControlsModal() {
+    const el = document.getElementById('controls-modal');
+    if (el) el.style.display = 'flex';
+}
+function closeControlsModal() {
+    const el = document.getElementById('controls-modal');
+    if (el) el.style.display = 'none';
+}
+
+window.openTutorialModal = openTutorialModal;
+window.closeTutorialModal = closeTutorialModal;
+window.openControlsModal = openControlsModal;
+window.closeControlsModal = closeControlsModal;

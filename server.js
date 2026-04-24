@@ -51,6 +51,9 @@ const CATALOG = {
     field_3: { name: 'Planície Alta', x: 5000, y: 7000, w: 1000, h: 1000, price: 20000 },
     field_4: { name: 'Campos do Rio', x: 6200, y: 7000, w: 1500, h: 1000, price: 35000 },
     field_5: { name: 'Latifúndio', x: 5000, y: 8200, w: 2500, h: 1200, price: 80000 }
+  },
+  items: {
+    cellphone: { name: 'Celular Smartphone', type: 'item', price: 500 }
   }
 };
 
@@ -118,7 +121,8 @@ app.get('/state', (req, res) => {
         x: c.x, y: c.y, growthStage: c.growthStage, isDead: c.isDead, isReady: c.isReady
       })),
       inventory: globalState.farm.inventory,
-      unlockedLands: globalState.farm.unlockedLands
+      unlockedLands: globalState.farm.unlockedLands,
+      hasCellphone: globalState.farm.hasCellphone
     }
   });
 });
@@ -209,6 +213,15 @@ app.post('/shop/buy', (req, res) => {
     if (globalState.farm.unlockedLands.includes(itemId)) return res.status(400).json({ success: false, message: 'Já possui' });
     globalState.farm.money -= it.price;
     globalState.farm.unlockedLands.push(itemId);
+    return res.json({ success: true });
+  }
+  if (category === 'items') {
+    const it = CATALOG.items[itemId];
+    if (!it) return res.status(400).json({ success: false, message: 'Item inválido' });
+    if (globalState.farm.money < it.price) return res.status(400).json({ success: false, message: 'Sem dinheiro' });
+    if (itemId === 'cellphone' && globalState.farm.hasCellphone) return res.status(400).json({ success: false, message: 'Já possui' });
+    globalState.farm.money -= it.price;
+    if (itemId === 'cellphone') globalState.farm.hasCellphone = true;
     return res.json({ success: true });
   }
   res.status(400).json({ success: false });

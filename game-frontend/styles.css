@@ -206,15 +206,111 @@ canvas { display: block; }
 .garage-item.selected::after { content: 'ATIVO'; font-size: 8px; color: #2ecc71; background: rgba(46,204,113,0.2); padding: 2px 4px; border-radius: 3px; }
 
 
-/* Instructions */
-#instructions {
-    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
-    background: rgba(10, 10, 20, 0.8); backdrop-filter: blur(5px);
-    color: #95a5a6; padding: 12px 16px; border-radius: 12px;
-    font-size: 11px; z-index: 10; pointer-events: none; min-width: 760px;
-    text-align: center;
-    border: 1px solid rgba(255,255,255,0.05); line-height: 1.6;
+/* Side Buttons */
+#ui-buttons-container {
+    position: absolute;
+    bottom: 250px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 10;
 }
+#btn-tutorial, #btn-controls {
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: 1px solid #2ecc71;
+    border-radius: 8px;
+    padding: 10px 15px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+#btn-tutorial:hover, #btn-controls:hover {
+    background: rgba(46, 204, 113, 0.3);
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+}
+
+/* Modals for Controls & Tutorial */
+.game-modal {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 120;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.modal-inner {
+    background: rgba(10, 15, 25, 0.95);
+    border: 1px solid #2ecc71;
+    border-radius: 12px;
+    width: 600px;
+    max-height: 80vh;
+    box-shadow: 0 0 30px rgba(46, 204, 113, 0.2);
+    display: flex;
+    flex-direction: column;
+}
+.modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; border-bottom: 1px solid rgba(46,204,113,0.3);
+}
+.modal-header h2 { color: #2ecc71; font-size: 18px; }
+.modal-close {
+    background: none; border: 1px solid #e74c3c; color: #e74c3c;
+    font-size: 16px; cursor: pointer; border-radius: 4px; padding: 2px 8px; transition: 0.2s;
+}
+.modal-close:hover { background: #e74c3c; color: #fff; }
+.modal-content {
+    padding: 20px;
+    overflow-y: auto;
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.6;
+}
+.modal-content ul {
+    list-style-type: none;
+    padding: 0;
+}
+.modal-content li {
+    background: rgba(255,255,255,0.05);
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border-left: 3px solid #2ecc71;
+}
+.modal-content li b {
+    color: #f1c40f;
+    display: inline-block;
+    min-width: 60px;
+}
+.tutorial-list .tut-step {
+    background: rgba(255,255,255,0.05);
+    margin-bottom: 10px;
+    padding: 10px 15px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.tut-step span {
+    background: #2ecc71;
+    color: #000;
+    font-weight: bold;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.tut-step b { color: #f1c40f; }
 
 /* Shop Modal */
 #shop-modal {
@@ -222,23 +318,21 @@ canvas { display: block; }
     background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
     z-index: 100; justify-content: center; align-items: center;
 }
-#sell-modal, #map-modal {
+#map-modal {
     display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.72); backdrop-filter: blur(4px);
     z-index: 110; justify-content: center; align-items: center;
 }
 #shop-inner {
     background: #1a1a2e; border: 1px solid #2ecc71; border-radius: 12px;
-    width: 520px; max-height: 80vh; overflow-y: auto;
+    width: 650px; max-height: 85vh; display: flex; flex-direction: column;
     box-shadow: 0 0 40px rgba(46,204,113,0.15);
 }
-#sell-inner, #map-inner {
+#map-inner {
     background: #1a1a2e; border: 1px solid #2ecc71; border-radius: 12px;
-    width: 760px; max-height: 86vh; overflow: hidden;
+    width: 940px; max-height: 86vh; overflow: hidden; padding-bottom: 12px;
     box-shadow: 0 0 40px rgba(46,204,113,0.15);
 }
-#sell-content { padding: 12px; max-height: 65vh; overflow-y: auto; }
-#map-inner { width: 940px; padding-bottom: 12px; }
 #world-map-canvas {
     display: block;
     margin: 10px auto 0;
@@ -256,25 +350,59 @@ canvas { display: block; }
 .shop-tab:hover { color: #ecf0f1; }
 .shop-tab.active { color: #2ecc71; border-bottom: 2px solid #2ecc71; background: rgba(46,204,113,0.05); }
 
-#shop-content { padding: 12px; }
+#shop-content { padding: 16px; flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; align-content: start; }
+.shop-category-title { grid-column: 1 / -1; color: #2ecc71; font-size: 14px; margin-top: 10px; border-bottom: 1px solid rgba(46,204,113,0.3); padding-bottom: 4px; }
 .shop-item {
-    display: flex; align-items: center; gap: 6px;
-    padding: 10px 12px; margin-bottom: 6px;
-    border-radius: 6px; background: rgba(44,62,80,0.4);
-    border: 1px solid transparent; transition: 0.2s;
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 12px; border-radius: 8px; background: rgba(44,62,80,0.4);
+    border: 1px solid rgba(255,255,255,0.05); transition: 0.2s; position: relative;
 }
-.shop-item:hover { border-color: rgba(46,204,113,0.3); }
-.shop-item.owned { opacity: 0.5; }
-.si-brand { color: #f39c12; font-size: 9px; font-weight: bold; min-width: 80px; text-transform: uppercase; }
-.si-name { color: #ecf0f1; font-size: 12px; font-weight: bold; min-width: 80px; }
-.si-stats { color: #7f8c8d; font-size: 10px; flex: 1; }
-.si-price { color: #f1c40f; font-size: 12px; font-weight: bold; min-width: 50px; text-align: right; }
-.si-owned { color: #2ecc71; font-size: 14px; font-weight: bold; }
+.shop-item:hover { border-color: rgba(46,204,113,0.3); background: rgba(44,62,80,0.6); }
+.shop-item.owned { opacity: 0.6; }
+.si-brand { color: #f39c12; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+.si-name { color: #ecf0f1; font-size: 14px; font-weight: bold; }
+.si-stats { color: #bdc3c7; font-size: 11px; display: flex; flex-direction: column; gap: 2px; }
+.si-stats span { display: flex; justify-content: space-between; }
+.si-price { color: #f1c40f; font-size: 14px; font-weight: bold; text-align: center; margin-top: 4px; }
+.si-owned { color: #2ecc71; font-size: 12px; font-weight: bold; text-align: center; }
+.si-autodrive { position: absolute; top: -8px; right: -8px; background: #2ecc71; color: #000; font-size: 9px; font-weight: bold; padding: 3px 6px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
 .shop-item button {
-    background: #2ecc71; border: none; color: #1a1a2e;
-    padding: 4px 10px; border-radius: 4px; cursor: pointer;
-    font-family: inherit; font-size: 11px; font-weight: bold; transition: 0.2s;
+    background: #2ecc71; border: none; color: #1a1a2e; margin-top: 6px;
+    padding: 6px 10px; border-radius: 4px; cursor: pointer; width: 100%;
+    font-family: inherit; font-size: 12px; font-weight: bold; transition: 0.2s;
 }
 .shop-item button:hover { background: #27ae60; }
 .shop-item button:disabled { background: #34495e; color: #7f8c8d; cursor: not-allowed; }
-.shop-info { color: #7f8c8d; font-size: 11px; text-align: center; padding: 8px; border-top: 1px solid #2c3e50; margin-top: 8px; }
+.shop-item button.btn-sell { background: #e74c3c; color: #fff; }
+.shop-item button.btn-sell:hover { background: #c0392b; }
+.shop-info { grid-column: 1 / -1; color: #7f8c8d; font-size: 12px; text-align: center; padding: 12px; border-top: 1px solid #2c3e50; margin-top: 8px; }
+
+/* Cellphone Modal */
+#cellphone-modal {
+    display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+    z-index: 150; justify-content: center; align-items: center;
+}
+#cellphone-inner {
+    background: #0f172a; border: 4px solid #1e293b; border-radius: 24px;
+    width: 320px; height: 580px; display: flex; flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8); overflow: hidden; position: relative;
+}
+.cellphone-header {
+    background: #1e293b; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;
+}
+.cellphone-header h2 { color: #38bdf8; font-size: 18px; margin: 0; }
+.cellphone-close { background: none; border: none; color: #e2e8f0; font-size: 18px; cursor: pointer; }
+.cellphone-balance { background: #020617; color: #2ecc71; text-align: center; padding: 10px; font-size: 18px; font-weight: bold; border-bottom: 1px solid #1e293b; }
+.cellphone-tabs { display: flex; background: #1e293b; }
+.cellphone-tab { flex: 1; padding: 10px 0; background: none; border: none; color: #94a3b8; font-size: 11px; cursor: pointer; border-bottom: 2px solid transparent; }
+.cellphone-tab.active { color: #38bdf8; border-bottom-color: #38bdf8; font-weight: bold; background: rgba(56, 189, 248, 0.1); }
+#cellphone-content { padding: 15px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.cp-item { background: #1e293b; border-radius: 8px; padding: 12px; border: 1px solid #334155; }
+.cp-name { color: #f8fafc; font-size: 14px; font-weight: bold; margin-bottom: 4px; }
+.cp-price { color: #fbbf24; font-size: 13px; font-weight: bold; margin-bottom: 8px; }
+.cp-item button { width: 100%; padding: 8px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; }
+.cp-btn-buy { background: #38bdf8; color: #0f172a; }
+.cp-btn-buy:hover { background: #0ea5e9; }
+.cp-btn-sell { background: #ef4444; color: #fff; }
+.cp-btn-sell:hover { background: #dc2626; }
