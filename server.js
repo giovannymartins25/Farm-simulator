@@ -1,11 +1,17 @@
 import express from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import { globalState } from './core/state.js';
 import { runTick } from './core/gameLoop.js';
 import Crop from './models/crop.js';
 
 const app = express();
 const PORT = 3000;
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: "*" }
+});
 app.use(cors());
 app.use(express.json());
 
@@ -371,4 +377,191 @@ app.post('/action/truck/transfer-seeds', (req, res) => {
   res.json({ success: true, transferred: n });
 });
 
-app.listen(PORT, () => console.log(`Backend rodando em http://localhost:${PORT}`));
+// ============================================================
+//  MULTIPLAYER (SOCKET.IO)
+// ============================================================
+const rooms = {}; // roomId -> { players: [], isPrivate, code }
+const players = {}; // socketId -> { id, roomId, x, y, angle, vehicleId, nickname }
+
+function generateRoomCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+io.on('connection', (socket) => {
+  console.log(`[Multiplayer] Novo jogador conectado: ${socket.id}`);
+
+  // 1. Criar novo jogador (inicialmente sem sala)
+  players[socket.id] = {
+    id: socket.id,
+    roomId: null,
+    nickname: `Jogador ${socket.id.substring(0, 4)}`,
+    x: 1000 + Math.random() * 100,
+    y: 1000 + Math.random() * 100,
+    angle: 0,
+    vehicleId: null
+  };
+
+  // --- LOBBY EVENTS ---
+
+  socket.on('createRoom', ({ nickname, isPrivate }) => {
+    const roomId = `room_${Date.now()}`;
+    const code = isPrivate ? generateRoomCode() : null;
+    
+    rooms[roomId] = {
+      id: roomId,
+      players: [],
+      isPrivate: !!isPrivate,
+      code: code,
+      createdAt: Date.now()
+    };
+
+    players[socket.id].nickname = nickname || players[socket.id].nickname;
+    joinRoom(socket, roomId);
+    
+    socket.emit('roomCreated', { roomId, code });
+    broadcastRoomList();
+  });
+
+  socket.on('joinRoom', ({ roomId, nickname }) => {
+    if (rooms[roomId]) {
+      players[socket.id].nickname = nickname || players[socket.id].nickname;
+      joinRoom(socket, roomId);
+    } else {
+      socket.emit('error', 'Sala não encontrada');
+    }
+  });
+
+  socket.on('joinByCode', ({ code, nickname }) => {
+    const room = Object.values(rooms).find(r => r.code === code);
+    if (room) {
+      players[socket.id].nickname = nickname || players[socket.id].nickname;
+      joinRoom(socket, room.id);
+    } else {
+      socket.emit('error', 'Código de sala inválido');
+    }
+  });
+
+  socket.on('requestRoomList', () => {
+    broadcastRoomList(socket);
+  });
+
+  function joinRoom(socket, roomId) {
+    const oldRoomId = players[socket.id].roomId;
+    if (oldRoomId) {
+      socket.leave(oldRoomId);
+      rooms[oldRoomId].players = rooms[oldRoomId].players.filter(id => id !== socket.id);
+      if (rooms[oldRoomId].players.length === 0) delete rooms[oldRoomId];
+    }
+
+    socket.join(roomId);
+    players[socket.id].roomId = roomId;
+    rooms[roomId].players.push(socket.id);
+
+    // Enviar dados da sala para o jogador
+    const roomPlayers = {};
+    rooms[roomId].players.forEach(pid => {
+      roomPlayers[pid] = players[pid];
+    });
+    
+    socket.emit('currentPlayers', roomPlayers);
+    
+    // Notificar outros na sala
+    socket.to(roomId).emit('newPlayer', players[socket.id]);
+    
+    console.log(`[Multiplayer] ${players[socket.id].nickname} entrou na sala ${roomId}`);
+    broadcastRoomList();
+  }
+
+  function broadcastRoomList(target = io) {
+    const publicRooms = Object.values(rooms)
+      .filter(r => !r.isPrivate)
+      .map(r => ({
+        id: r.id,
+        playerCount: r.players.length,
+        name: `Fazenda de ${players[r.players[0]]?.nickname || 'Alguém'}`
+      }));
+    target.emit('roomList', publicRooms);
+  }
+
+  // --- GAMEPLAY EVENTS (Room Scoped) ---
+
+  // 4. Receber movimento do jogador
+  socket.on('playerMove', (moveData) => {
+    const player = players[socket.id];
+    if (player && player.roomId) {
+      player.x = moveData.x;
+      player.y = moveData.y;
+      player.angle = moveData.angle;
+      player.vehicleId = moveData.vehicleId;
+      
+      // Emitir para todos os outros NA MESMA SALA
+      socket.to(player.roomId).emit('playerMoved', player);
+    }
+  });
+
+  // 5. Veículo: Entrar
+  socket.on('enterVehicle', (data) => {
+    const player = players[socket.id];
+    if (player && player.roomId) {
+      player.vehicleId = data.vehicleId;
+      socket.to(player.roomId).emit('enterVehicle', {
+        playerId: socket.id,
+        vehicleId: data.vehicleId
+      });
+    }
+  });
+
+  // 6. Veículo: Sair
+  socket.on('exitVehicle', () => {
+    const player = players[socket.id];
+    if (player && player.roomId) {
+      player.vehicleId = null;
+      socket.to(player.roomId).emit('exitVehicle', {
+        playerId: socket.id
+      });
+    }
+  });
+
+  // 7. Veículo: Atualizar posição
+  socket.on('vehicleUpdate', (vehData) => {
+    const player = players[socket.id];
+    if (player && player.roomId) {
+      // Broadcast para os outros na sala
+      socket.to(player.roomId).emit('vehicleUpdated', vehData);
+    }
+  });
+
+  // 8. Chat: Mensagem
+  socket.on('chatMessage', (data) => {
+    const player = players[socket.id];
+    console.log(`[Chat] Mensagem de ${player?.nickname || 'Desconhecido'} na sala ${player?.roomId || 'Nenhuma'}: ${data.message}`);
+    if (player && player.roomId) {
+      // Broadcast para todos na sala (incluindo o remetente para confirmação se quiser, 
+      // mas aqui emitiremos para a sala inteira via io.to)
+      io.to(player.roomId).emit('chatMessage', {
+        nickname: player.nickname,
+        message: data.message,
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        playerId: socket.id
+      });
+    }
+  });
+
+  // 9. Desconexão
+  socket.on('disconnect', () => {
+    const player = players[socket.id];
+    if (player) {
+      const roomId = player.roomId;
+      if (roomId && rooms[roomId]) {
+        rooms[roomId].players = rooms[roomId].players.filter(id => id !== socket.id);
+        socket.to(roomId).emit('playerLeft', socket.id);
+        if (rooms[roomId].players.length === 0) delete rooms[roomId];
+      }
+      delete players[socket.id];
+      console.log(`[Multiplayer] Jogador desconectado: ${socket.id}`);
+      broadcastRoomList();
+    }
+  });
+});
+
+httpServer.listen(PORT, () => console.log(`Backend Multiplayer rodando em http://localhost:${PORT}`));

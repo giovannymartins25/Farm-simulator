@@ -543,6 +543,9 @@ let monitorVisible = false;
 let vehicleSelectionIdx = 0; // Índice do veículo "selecionado" para cycling
 let landBordersGfx;
 let gpsGuideGfx;
+let multiplayerMode = false;
+let socket = null;
+let otherPlayers = {}; // { socketId: { sprite, text } }
 
 // === Zones ===
 const SHOP_POS = { x: 1500, y: 1500 };
@@ -1952,6 +1955,9 @@ function update() {
         player.x = Phaser.Math.Clamp(player.x + vx, TILE, W - TILE);
         player.y = Phaser.Math.Clamp(player.y + vy, TILE, H - TILE);
 
+        // Multiplayer Sync: Visibility fix
+        player.setVisible(true);
+
         const pvx = vx;
         const pvy = vy;
         if (pvx > 0) { player.setTexture('p_side'); player.setFlipX(false); }
@@ -1987,6 +1993,36 @@ function update() {
         }
     });
 
+    // ============================================================
+    // MULTIPLAYER SYNC (PHASE 1)
+    // ============================================================
+    if (multiplayerMode && socket && socket.connected) {
+        if (!this._lastMoveEmit || Date.now() - this._lastMoveEmit > 30) { // ~33fps sync
+            const activeVeh = getActiveVehicle();
+            
+            // Sync Player Movement
+            socket.emit('playerMove', {
+                x: activeVeh ? activeVeh.sprite.x : player.x,
+                y: activeVeh ? activeVeh.sprite.y : player.y,
+                angle: activeVeh ? activeVeh.sprite.rotation : player.rotation,
+                vehicleId: activeVeh ? activeVeh.id : null
+            });
+
+            // Sync Vehicle Movement (if we are the driver)
+            if (activeVeh) {
+                socket.emit('vehicleUpdate', {
+                    id: activeVeh.id,
+                    x: activeVeh.sprite.x,
+                    y: activeVeh.sprite.y,
+                    angle: activeVeh.sprite.rotation,
+                    velocity: activeVeh.velocity,
+                    isOn: activeVeh.engineOn
+                });
+            }
+
+            this._lastMoveEmit = Date.now();
+        }
+    }
 }
 
 function handleContinuousActions() {
@@ -2377,6 +2413,47 @@ async function triggerHarvest(veh, tx, ty) {
 // ============================================================
 //  KEY HANDLERS
 // ============================================================
+function doToggleVehicle() {
+    if (shopOpen) return;
+    
+    if (activeVehIdx >= 0) {
+        // Saindo do veículo
+        const veh = getActiveVehicle();
+        if (multiplayerMode && socket && socket.connected) {
+            socket.emit('exitVehicle');
+        }
+        activeVehIdx = -1;
+        player.setVisible(true);
+        refreshStatusHUD();
+        refreshGearHUD();
+        showToast('Você saiu do veículo');
+    } else {
+        // Tentando entrar em um veículo próximo
+        for (let i = 0; i < vehicleSprites.length; i++) {
+            const v = vehicleSprites[i];
+            if (near(player, v.sprite, 80)) {
+                activeVehIdx = i;
+                player.setVisible(false);
+                
+                // Auto-ativar monitor de campo para máquinas avançadas
+                const m = getVehicleModel(v);
+                if (m && Number(m.gears) === 6 && m.autoDrive) {
+                    console.log("Auto-ativando monitor para:", m.name, "Gears:", m.gears);
+                    monitorVisible = true;
+                    // Forçar atualização da UI no próximo frame de render
+                }
+
+                if (multiplayerMode && socket && socket.connected) {
+                    socket.emit('enterVehicle', { vehicleId: v.id });
+                }
+                refreshStatusHUD();
+                refreshGearHUD();
+                showToast(`Você entrou em: ${v.modelId}`);
+                return;
+            }
+        }
+    }
+}
 function doShiftUp() {
     const veh = getActiveVehicle();
     if (activeVehIdx < 0 || transMode !== 'manual' || (veh && veh.autoDriveEnabled)) return;
@@ -2564,6 +2641,7 @@ function doToggleVehicle() {
         document.getElementById('dashboard').style.display = 'none';
         const mon = document.getElementById('field-monitor');
         if (mon) mon.style.display = 'none';
+        monitorVisible = false;
         
         refreshGearHUD();
         return;
@@ -2583,6 +2661,11 @@ function doToggleVehicle() {
         maxGears = (m?.gears || 4);
         transMode = (m?.gearType === 'auto') ? 'auto' : 'manual';
         
+        // Auto-ativar monitor de campo para máquinas avançadas
+        if (Number(maxGears) === 6 && (m?.autoDrive)) {
+            monitorVisible = true;
+        }
+
         // NÃO resetar AutoDrive ao entrar! 
         // Apenas atualizar HUD
         highlightVehicle(-1); 
@@ -2852,7 +2935,7 @@ function renderFieldMonitor() {
     const model = getVehicleModel(veh);
     
     // Visibilidade estrita: 6 marchas + autodrive + monitorVisible
-    const shouldShow = veh && model && model.gears === 6 && model.autoDrive && monitorVisible;
+    const shouldShow = veh && model && Number(model.gears) === 6 && model.autoDrive && monitorVisible;
     
     if (!shouldShow) {
         monDiv.style.display = 'none';
@@ -3736,3 +3819,324 @@ window.openTutorialModal = openTutorialModal;
 window.closeTutorialModal = closeTutorialModal;
 window.openControlsModal = openControlsModal;
 window.closeControlsModal = closeControlsModal;
+
+function openPauseMenu() {
+    document.getElementById('pause-modal').style.display = 'flex';
+}
+
+function closePauseMenu() {
+    document.getElementById('pause-modal').style.display = 'none';
+}
+
+function quitToMainMenu() {
+    closePauseMenu();
+    
+    // Desconectar se estiver em multiplayer
+    if (socket) {
+        socket.disconnect();
+        socket = null;
+    }
+    
+    multiplayerMode = false;
+    
+    // Esconder HUDs
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('minimap').style.display = 'none';
+    document.getElementById('field-monitor').style.display = 'none';
+    document.getElementById('ui-buttons-container').style.display = 'none';
+    document.getElementById('ui-room-code').style.display = 'none';
+    document.getElementById('chat-container').style.display = 'none';
+    
+    // Mostrar Menu Inicial
+    document.getElementById('main-menu').style.display = 'flex';
+    
+    // Resetar estado local do jogador se necessário (opcional)
+    // window.location.reload(); // Uma forma bruta mas eficaz de resetar tudo
+}
+
+// ============================================================
+//  MULTIPLAYER LOGIC (PHASE 1)
+// ============================================================
+
+function startSoloMode() {
+    multiplayerMode = false;
+    document.getElementById('main-menu').style.display = 'none';
+    document.getElementById('ui-room-code').style.display = 'none';
+    document.getElementById('chat-container').style.display = 'none';
+    
+    // Garantir que o HUD e controles estejam visíveis
+    document.getElementById('hud').style.display = 'block';
+    document.getElementById('minimap').style.display = 'block';
+    document.getElementById('ui-buttons-container').style.display = 'flex';
+    
+    console.log("Iniciando Modo Solo...");
+}
+
+function startMultiplayerMode() {
+    document.getElementById('main-menu').style.display = 'none';
+    document.getElementById('lobby-screen').style.display = 'flex';
+    console.log("Abrindo Lobby Multiplayer...");
+    initMultiplayer();
+}
+
+function backToMainMenu() {
+    document.getElementById('lobby-screen').style.display = 'none';
+    document.getElementById('main-menu').style.display = 'flex';
+    if (socket) {
+        socket.disconnect();
+        socket = null;
+    }
+}
+
+function initMultiplayer() {
+    if (socket) return;
+    
+    socket = io(API || window.location.origin);
+
+    socket.on('connect', () => {
+        console.log("Conectado ao servidor multiplayer! ID:", socket.id);
+        socket.emit('requestRoomList');
+        setupChatListeners(); // Garantir que listeners estão prontos ao conectar
+    });
+
+    socket.on('roomList', (rooms) => {
+        const list = document.getElementById('lobby-rooms-list');
+        if (!list) return;
+        
+        if (rooms.length === 0) {
+            list.innerHTML = '<div class="no-rooms">Nenhuma sala pública disponível</div>';
+            return;
+        }
+
+        list.innerHTML = rooms.map(room => `
+            <div class="room-item">
+                <div class="room-info">
+                    <span class="room-name">${room.name}</span>
+                    <span class="room-players">${room.playerCount} jogadores</span>
+                </div>
+                <button class="room-join-btn" onclick="lobbyJoinRoom('${room.id}')">Entrar</button>
+            </div>
+        `).join('');
+    });
+
+    socket.on('roomCreated', ({ roomId, code }) => {
+        if (code) {
+            showToast(`Sala privada criada! Código: ${code}`, 'success');
+            // Copiar código para área de transferência se possível
+            navigator.clipboard.writeText(code).catch(e => e);
+            
+            // Mostrar no HUD
+            document.getElementById('ui-room-code').style.display = 'block';
+            document.getElementById('ui-room-code-val').textContent = code;
+        } else {
+            document.getElementById('ui-room-code').style.display = 'block';
+            document.getElementById('ui-room-code-val').textContent = 'PÚBLICA';
+        }
+        
+        // Mostrar UI do jogo
+        document.getElementById('hud').style.display = 'block';
+        document.getElementById('minimap').style.display = 'block';
+        document.getElementById('ui-buttons-container').style.display = 'flex';
+        document.getElementById('chat-container').style.display = 'flex';
+        
+        document.getElementById('lobby-screen').style.display = 'none';
+        multiplayerMode = true;
+    });
+
+    socket.on('currentPlayers', (players) => {
+        // Limpar jogadores antigos
+        Object.values(otherPlayers).forEach(op => {
+            op.sprite.destroy();
+            op.text.destroy();
+        });
+        otherPlayers = {};
+
+        Object.keys(players).forEach((id) => {
+            if (id !== socket.id) {
+                addOtherPlayer(id, players[id]);
+            }
+        });
+        
+        // Se entramos por código, o código deve estar no input
+        const codeInput = document.getElementById('lobby-join-code');
+        if (codeInput && codeInput.value) {
+            document.getElementById('ui-room-code').style.display = 'block';
+            document.getElementById('ui-room-code-val').textContent = codeInput.value.toUpperCase();
+        } else {
+            // Se for pública (ou via lista), mostrar como pública por enquanto
+            // (Poderíamos receber o código/tipo da sala no evento currentPlayers futuramente)
+            document.getElementById('ui-room-code').style.display = 'block';
+            document.getElementById('ui-room-code-val').textContent = 'CONECTADO';
+        }
+
+        // Mostrar UI do jogo
+        document.getElementById('hud').style.display = 'block';
+        document.getElementById('minimap').style.display = 'block';
+        document.getElementById('ui-buttons-container').style.display = 'flex';
+        document.getElementById('chat-container').style.display = 'flex';
+
+        document.getElementById('lobby-screen').style.display = 'none';
+        multiplayerMode = true;
+    });
+
+    socket.on('newPlayer', (playerInfo) => {
+        addOtherPlayer(playerInfo.id, playerInfo);
+    });
+
+    socket.on('playerMoved', (playerInfo) => {
+        if (otherPlayers[playerInfo.id]) {
+            const op = otherPlayers[playerInfo.id];
+            op.sprite.setPosition(playerInfo.x, playerInfo.y);
+            op.sprite.setRotation(playerInfo.angle);
+            op.text.setPosition(playerInfo.x, playerInfo.y - 40);
+            
+            // Se o jogador estiver em um veículo, esconda o sprite dele
+            if (playerInfo.vehicleId) {
+                op.sprite.setVisible(false);
+            } else {
+                op.sprite.setVisible(true);
+            }
+        }
+    });
+
+    socket.on('enterVehicle', (data) => {
+        if (otherPlayers[data.playerId]) {
+            otherPlayers[data.playerId].sprite.setVisible(false);
+        }
+    });
+
+    socket.on('exitVehicle', (data) => {
+        if (otherPlayers[data.playerId]) {
+            otherPlayers[data.playerId].sprite.setVisible(true);
+        }
+    });
+
+    socket.on('vehicleUpdated', (vehData) => {
+        const veh = vehicleSprites.find(v => v.id === vehData.id);
+        if (veh && activeVehIdx !== vehicleSprites.indexOf(veh)) {
+            // Só atualizar se NÃO formos nós controlando
+            veh.sprite.setPosition(vehData.x, vehData.y);
+            veh.sprite.setRotation(vehData.angle);
+            veh.engineOn = vehData.isOn;
+            // Atualizar física básica para que outros vejam o movimento fluido se houver interpolação (opcional)
+        }
+    });
+
+    socket.on('playerLeft', (id) => {
+        if (otherPlayers[id]) {
+            otherPlayers[id].sprite.destroy();
+            otherPlayers[id].text.destroy();
+            delete otherPlayers[id];
+        }
+    });
+
+    socket.on('chatMessage', (data) => {
+        addMessageToChat(data.nickname, data.message, data.time, data.playerId === socket.id);
+    });
+
+    socket.on('error', (msg) => {
+        showToast(msg, 'error');
+    });
+}
+
+function lobbyCreateRoom(isPrivate) {
+    const nickname = document.getElementById('lobby-nickname').value || `Jogador ${socket.id.substring(0, 4)}`;
+    socket.emit('createRoom', { nickname, isPrivate });
+}
+
+function lobbyJoinRoom(roomId) {
+    const nickname = document.getElementById('lobby-nickname').value || `Jogador ${socket.id.substring(0, 4)}`;
+    socket.emit('joinRoom', { roomId, nickname });
+}
+
+function lobbyJoinByCode() {
+    const code = document.getElementById('lobby-join-code').value.toUpperCase();
+    const nickname = document.getElementById('lobby-nickname').value || `Jogador ${socket.id.substring(0, 4)}`;
+    if (!code) return showToast('Digite o código da sala', 'warning');
+    socket.emit('joinByCode', { code, nickname });
+}
+
+function addOtherPlayer(id, info) {
+    const scene = game.scene.scenes[0];
+    if (!scene) return;
+
+    console.log("Adicionando outro jogador:", id);
+    const sprite = scene.add.sprite(info.x, info.y, 'p_down').setDepth(4);
+    sprite.setTint(0x38bdf8); // Diferenciar outros jogadores com um tom azul
+    
+    // Esconder se já estiver em um veículo
+    if (info.vehicleId) sprite.setVisible(false);
+
+    const ls = { font: '10px Arial', fill: '#38bdf8', backgroundColor: '#0008', padding: { x: 4, y: 2 } };
+    const text = scene.add.text(info.x, info.y - 40, info.nickname || `Jogador ${id.substring(0, 4)}`, ls).setOrigin(0.5).setDepth(5);
+
+    otherPlayers[id] = { sprite, text };
+}
+
+function addMessageToChat(nick, msg, time, isSelf) {
+    console.log("Recebendo mensagem no chat:", nick, msg);
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+
+    const div = document.createElement('div');
+    div.className = 'chat-msg' + (isSelf ? ' self' : '');
+    
+    div.innerHTML = `
+        <span class="chat-msg-time">[${time}]</span>
+        <span class="chat-msg-nick">${nick}:</span>
+        <span class="chat-msg-text">${msg}</span>
+    `;
+
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+// Configurar input do chat
+function setupChatListeners() {
+    const chatInput = document.getElementById('chat-input');
+    console.log("Configurando listeners do chat... Input encontrado:", !!chatInput);
+    if (chatInput) {
+        // Remover listeners antigos se houver (para evitar duplicatas em re-init)
+        const newChatInput = chatInput.cloneNode(true);
+        chatInput.parentNode.replaceChild(newChatInput, chatInput);
+        
+        newChatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const message = e.target.value.trim();
+                console.log("Tentativa de envio - Mensagem:", message, "Socket Conectado:", (socket && socket.connected));
+                if (message && socket && socket.connected) {
+                    socket.emit('chatMessage', { message });
+                    console.log("Evento 'chatMessage' emitido!");
+                    e.target.value = '';
+                    e.target.blur(); // Remove o foco do chat para as teclas voltarem para o jogo
+                }
+            }
+            e.stopPropagation();
+        });
+
+        newChatInput.addEventListener('focus', () => {
+            if (game && game.input && game.input.keyboard) game.input.keyboard.enabled = false;
+        });
+        newChatInput.addEventListener('blur', () => {
+            if (game && game.input && game.input.keyboard) game.input.keyboard.enabled = true;
+        });
+    }
+}
+
+// Chamar setup quando o DOM estiver pronto ou re-iniciado
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupChatListeners);
+} else {
+    setupChatListeners();
+}
+
+window.startSoloMode = startSoloMode;
+window.startMultiplayerMode = startMultiplayerMode;
+window.lobbyCreateRoom = lobbyCreateRoom;
+window.lobbyJoinRoom = lobbyJoinRoom;
+window.lobbyJoinByCode = lobbyJoinByCode;
+window.backToMainMenu = backToMainMenu;
+window.openPauseMenu = openPauseMenu;
+window.closePauseMenu = closePauseMenu;
+window.quitToMainMenu = quitToMainMenu;
