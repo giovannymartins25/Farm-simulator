@@ -682,7 +682,8 @@ function create() {
         m: Phaser.Input.Keyboard.KeyCodes.M,
         n: Phaser.Input.Keyboard.KeyCodes.N,
         z: Phaser.Input.Keyboard.KeyCodes.Z,
-        o: Phaser.Input.Keyboard.KeyCodes.O
+        o: Phaser.Input.Keyboard.KeyCodes.O,
+        b: Phaser.Input.Keyboard.KeyCodes.B
     });
     keys.f.on('down', doToggleVehicle, this);
     keys.e.on('down', doToggleHitch, this);
@@ -700,6 +701,7 @@ function create() {
     keys.m.on('down', toggleFullMap);
     keys.n.on('down', () => { monitorVisible = !monitorVisible; });
     keys.z.on('down', toggleCellphone);
+    keys.b.on('down', toggleChat);
     // Removemos doRefuel em on('down') pois será contínuo no update()
     this.input.keyboard.disableGlobalCapture();
 
@@ -4133,6 +4135,20 @@ function setupChatListeners() {
         newChatInput.addEventListener('blur', () => {
             if (game && game.input && game.input.keyboard) game.input.keyboard.enabled = true;
         });
+    }
+}
+
+function toggleChat() {
+    if (!multiplayerMode) return;
+    const chat = document.getElementById('chat-container');
+    if (!chat) return;
+
+    if (chat.style.display === 'none') {
+        chat.style.display = 'flex';
+        showToast('Chat visível', 'info');
+    } else {
+        chat.style.display = 'none';
+        showToast('Chat oculto (Aperte B)', 'info');
     }
 }
 

@@ -523,8 +523,8 @@ canvas { display: block; }
 
 /* Chat Multiplayer */
 #chat-container {
-    position: absolute; bottom: 390px; left: 20px;
-    width: 280px; height: 160px;
+    position: absolute; bottom: 380px; left: 20px;
+    width: 240px; height: 130px;
     background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(10px);
     border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 12px;
     display: flex; flex-direction: column; z-index: 60;

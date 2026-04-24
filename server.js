@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { 
+  cors: {
     origin: "*",
     methods: ["GET", "POST"]
   },
@@ -25,30 +25,30 @@ app.use(express.json());
 const CATALOG = {
   vehicles: {
     // TRATORES
-    tractor_mf275:   { name: 'MF 275',        brand: 'Massey Ferguson', type: 'tractor', hp: 50,  speed: 5, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.12, friction: 0.965, turnSpeedBase: 0.12, fuelCapacity: 50, price: 0 },
-    tractor_valtra:  { name: 'A850',           brand: 'Valtra',         type: 'tractor', hp: 85,  speed: 6, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.15, friction: 0.970, turnSpeedBase: 0.11, fuelCapacity: 80, price: 800 },
-    tractor_nh:      { name: 'T6.110',         brand: 'New Holland',    type: 'tractor', hp: 120, speed: 7, gears: 6, gearType: 'auto',   autoDrive: true,  acceleration: 0.19, friction: 0.975, turnSpeedBase: 0.09, fuelCapacity: 120, price: 1800 },
-    tractor_jd:      { name: 'JD 6130J',       brand: 'John Deere',     type: 'tractor', hp: 150, speed: 8, gears: 6, gearType: 'auto',   autoDrive: true,  acceleration: 0.23, friction: 0.980, turnSpeedBase: 0.08, fuelCapacity: 150, price: 3000 },
-    tractor_case:    { name: 'Magnum 310',     brand: 'Case IH',        type: 'tractor', hp: 220, speed: 9, gears: 6, gearType: 'auto',   autoDrive: true,  acceleration: 0.28, friction: 0.985, turnSpeedBase: 0.07, fuelCapacity: 220, price: 5000 },
+    tractor_mf275: { name: 'MF 275', brand: 'Massey Ferguson', type: 'tractor', hp: 50, speed: 5, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.12, friction: 0.965, turnSpeedBase: 0.12, fuelCapacity: 50, price: 0 },
+    tractor_valtra: { name: 'A850', brand: 'Valtra', type: 'tractor', hp: 85, speed: 6, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.15, friction: 0.970, turnSpeedBase: 0.11, fuelCapacity: 80, price: 800 },
+    tractor_nh: { name: 'T6.110', brand: 'New Holland', type: 'tractor', hp: 120, speed: 7, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.19, friction: 0.975, turnSpeedBase: 0.09, fuelCapacity: 120, price: 1800 },
+    tractor_jd: { name: 'JD 6130J', brand: 'John Deere', type: 'tractor', hp: 150, speed: 8, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.23, friction: 0.980, turnSpeedBase: 0.08, fuelCapacity: 150, price: 3000 },
+    tractor_case: { name: 'Magnum 310', brand: 'Case IH', type: 'tractor', hp: 220, speed: 9, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.28, friction: 0.985, turnSpeedBase: 0.07, fuelCapacity: 220, price: 5000 },
     // COLHEITADEIRAS
-    harvester_mf5650:{ name: 'MF 5650',        brand: 'Massey Ferguson', type: 'harvester', hp: 60,  capacity: 50,  speed: 4, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.10, friction: 0.960, turnSpeedBase: 0.06, fuelCapacity: 100, price: 0 },
-    harvester_nh:    { name: 'TC5090',         brand: 'New Holland',     type: 'harvester', hp: 100, capacity: 120, speed: 5, gears: 6, gearType: 'auto',   autoDrive: true,  acceleration: 0.13, friction: 0.965, turnSpeedBase: 0.05, fuelCapacity: 200, price: 2000 },
-    harvester_jd:    { name: 'S680',           brand: 'John Deere',      type: 'harvester', hp: 120, capacity: 250, speed: 6, gears: 6, gearType: 'auto',   autoDrive: true,  acceleration: 0.16, friction: 0.970, turnSpeedBase: 0.04, fuelCapacity: 350, price: 4500 },
+    harvester_mf5650: { name: 'MF 5650', brand: 'Massey Ferguson', type: 'harvester', hp: 60, capacity: 50, speed: 4, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.10, friction: 0.960, turnSpeedBase: 0.06, fuelCapacity: 100, price: 0 },
+    harvester_nh: { name: 'TC5090', brand: 'New Holland', type: 'harvester', hp: 100, capacity: 120, speed: 5, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.13, friction: 0.965, turnSpeedBase: 0.05, fuelCapacity: 200, price: 2000 },
+    harvester_jd: { name: 'S680', brand: 'John Deere', type: 'harvester', hp: 120, capacity: 250, speed: 6, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.16, friction: 0.970, turnSpeedBase: 0.04, fuelCapacity: 350, price: 4500 },
     // CAMINHÕES
-    truck_vw:        { name: 'Constellation',  brand: 'Volkswagen',      type: 'truck', hp: 120, capacity: 30,  speed: 7, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.18, friction: 0.975, turnSpeedBase: 0.05, fuelCapacity: 150, price: 0 },
-    truck_mb:        { name: 'Atego 2430',     brand: 'Mercedes-Benz',   type: 'truck', hp: 160, capacity: 80,  speed: 8, gears: 6, gearType: 'auto',   autoDrive: false, acceleration: 0.22, friction: 0.980, turnSpeedBase: 0.04, fuelCapacity: 250, price: 1500 },
-    truck_scania:    { name: 'R450',           brand: 'Scania',          type: 'truck', hp: 200, capacity: 150, speed: 9, gears: 6, gearType: 'auto',   autoDrive: false, acceleration: 0.26, friction: 0.985, turnSpeedBase: 0.04, fuelCapacity: 400, price: 3000 },
+    truck_vw: { name: 'Constellation', brand: 'Volkswagen', type: 'truck', hp: 120, capacity: 30, speed: 7, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.18, friction: 0.975, turnSpeedBase: 0.05, fuelCapacity: 150, price: 0 },
+    truck_mb: { name: 'Atego 2430', brand: 'Mercedes-Benz', type: 'truck', hp: 160, capacity: 80, speed: 8, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.22, friction: 0.980, turnSpeedBase: 0.04, fuelCapacity: 250, price: 1500 },
+    truck_scania: { name: 'R450', brand: 'Scania', type: 'truck', hp: 200, capacity: 150, speed: 9, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.26, friction: 0.985, turnSpeedBase: 0.04, fuelCapacity: 400, price: 3000 },
   },
   implements: {
-    plow_small:    { name: 'Tombador Pequeno',    type: 'plow',   requiredHp: 30,  width: 1, price: 0 },
-    plow_medium:   { name: 'Tombador Médio',      type: 'plow',   requiredHp: 80,  width: 2, price: 300 },
-    plow_large:    { name: 'Tombador Grande',      type: 'plow',   requiredHp: 150, width: 3, price: 700 },
-    harrow_small:  { name: 'Gradão 4 Linhas',     type: 'harrow', requiredHp: 30,  width: 1, lines: 4,  price: 0 },
-    harrow_medium: { name: 'Gradão 8 Linhas',     type: 'harrow', requiredHp: 80,  width: 2, lines: 8,  price: 400 },
-    harrow_large:  { name: 'Gradão 12 Linhas',    type: 'harrow', requiredHp: 150, width: 3, lines: 12, price: 800 },
-    seeder_small:  { name: 'Plantadeira Pequena',  type: 'seeder', requiredHp: 30,  width: 1, capacity: 20,  price: 0 },
-    seeder_medium: { name: 'Plantadeira Média',    type: 'seeder', requiredHp: 80,  width: 2, capacity: 50,  price: 450 },
-    seeder_large:  { name: 'Plantadeira Grande',    type: 'seeder', requiredHp: 150, width: 3, capacity: 100, price: 900 },
+    plow_small: { name: 'Tombador Pequeno', type: 'plow', requiredHp: 30, width: 1, price: 0 },
+    plow_medium: { name: 'Tombador Médio', type: 'plow', requiredHp: 80, width: 2, price: 300 },
+    plow_large: { name: 'Tombador Grande', type: 'plow', requiredHp: 150, width: 3, price: 700 },
+    harrow_small: { name: 'Gradão 4 Linhas', type: 'harrow', requiredHp: 30, width: 1, lines: 4, price: 0 },
+    harrow_medium: { name: 'Gradão 8 Linhas', type: 'harrow', requiredHp: 80, width: 2, lines: 8, price: 400 },
+    harrow_large: { name: 'Gradão 12 Linhas', type: 'harrow', requiredHp: 150, width: 3, lines: 12, price: 800 },
+    seeder_small: { name: 'Plantadeira Pequena', type: 'seeder', requiredHp: 30, width: 1, capacity: 20, price: 0 },
+    seeder_medium: { name: 'Plantadeira Média', type: 'seeder', requiredHp: 80, width: 2, capacity: 50, price: 450 },
+    seeder_large: { name: 'Plantadeira Grande', type: 'seeder', requiredHp: 150, width: 3, capacity: 100, price: 900 },
   },
   seeds: {
     seed_10: { name: '10 Sementes', amount: 10, price: 30 },
@@ -158,18 +158,18 @@ app.post('/action/refuel', (req, res) => {
   const { vehicleId } = req.body;
   const idx = globalState.farm.inventory.vehicles.findIndex(v => v.id === vehicleId);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Veículo não encontrado' });
-  
+
   const veh = globalState.farm.inventory.vehicles[idx];
   const model = CATALOG.vehicles[veh.modelId];
   if (!model) return res.status(404).json({ success: false, message: 'Modelo inválido' });
-  
+
   const maxFuel = model.fuelCapacity || 100;
   const missingFuel = Math.max(0, maxFuel - (veh.fuel || 0));
-  
+
   // Cost: $2 per liter/unit of fuel
   const fuelPricePerUnit = 2;
   const cost = Math.floor(missingFuel * fuelPricePerUnit);
-  
+
   if (missingFuel <= 0) {
     return res.json({ success: false, message: 'Tanque já está cheio!' });
   }
@@ -606,7 +606,7 @@ io.on('connection', (socket) => {
   socket.on('createRoom', ({ nickname, isPrivate }) => {
     const roomId = `room_${Date.now()}`;
     const code = isPrivate ? generateRoomCode() : null;
-    
+
     rooms[roomId] = {
       id: roomId,
       players: [],
@@ -617,7 +617,7 @@ io.on('connection', (socket) => {
 
     players[socket.id].nickname = nickname || players[socket.id].nickname;
     joinRoom(socket, roomId);
-    
+
     socket.emit('roomCreated', { roomId, code });
     broadcastRoomList();
   });
@@ -662,12 +662,12 @@ io.on('connection', (socket) => {
     rooms[roomId].players.forEach(pid => {
       roomPlayers[pid] = players[pid];
     });
-    
+
     socket.emit('currentPlayers', roomPlayers);
-    
+
     // Notificar outros na sala
     socket.to(roomId).emit('newPlayer', players[socket.id]);
-    
+
     console.log(`[Multiplayer] ${players[socket.id].nickname} entrou na sala ${roomId}`);
     broadcastRoomList();
   }
@@ -693,7 +693,7 @@ io.on('connection', (socket) => {
       player.y = moveData.y;
       player.angle = moveData.angle;
       player.vehicleId = moveData.vehicleId;
-      
+
       // Emitir para todos os outros NA MESMA SALA
       socket.to(player.roomId).emit('playerMoved', player);
     }
