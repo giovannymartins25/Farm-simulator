@@ -12,8 +12,8 @@ const config = {
 const game = new Phaser.Game(config);
 
 const TILE = 32;
-const IS_LOCALHOST = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-const API = IS_LOCALHOST ? 'http://localhost:3000' : 'https://farm-simulator.onrender.com';
+const IS_LOCALHOST = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168.');
+const API = IS_LOCALHOST ? `http://${window.location.hostname}:3000` : 'https://farm-simulator.onrender.com';
 const LOCAL_CATALOG = {
     vehicles: {
         tractor_mf275: { name: 'MF 275', brand: 'Massey Ferguson', type: 'tractor', hp: 50, speed: 5, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.12, friction: 0.965, turnSpeedBase: 0.12, fuelCapacity: 50, price: 0 },
@@ -48,11 +48,11 @@ const LOCAL_CATALOG = {
         cellphone: { name: 'Celular Smartphone', type: 'item', price: 500 }
     },
     lands: {
-        field_1: { name: 'Vale Esmeralda', x: 5000, y: 6000, w: 1000, h: 800, price: 0 },
-        field_2: { name: 'Colinas do Sol', x: 6200, y: 6000, w: 1200, h: 800, price: 15000 },
-        field_3: { name: 'Planicie Alta', x: 5000, y: 7000, w: 1000, h: 1000, price: 20000 },
-        field_4: { name: 'Campos do Rio', x: 6200, y: 7000, w: 1500, h: 1000, price: 35000 },
-        field_5: { name: 'Latifundio', x: 5000, y: 8200, w: 2500, h: 1200, price: 80000 }
+        field_1: { name: 'Vale Esmeralda', x: 4992, y: 5952, w: 1024, h: 832, price: 0 },
+        field_2: { name: 'Colinas do Sol', x: 6144, y: 5952, w: 1216, h: 832, price: 15000 },
+        field_3: { name: 'Planicie Alta', x: 4992, y: 6976, w: 1024, h: 1024, price: 20000 },
+        field_4: { name: 'Campos do Rio', x: 6144, y: 6976, w: 1536, h: 1024, price: 35000 },
+        field_5: { name: 'Latifundio', x: 4992, y: 8192, w: 2560, h: 1216, price: 80000 }
     }
 };
 let localState = null;
@@ -103,10 +103,25 @@ function createDefaultLocalState() {
 
 function ensureLocalState() {
     if (!localState) {
-        localState = createDefaultLocalState();
+        const saved = sessionStorage.getItem('soloFarmState');
+        if (saved) {
+            try {
+                localState = JSON.parse(saved);
+            } catch (e) {
+                localState = createDefaultLocalState();
+            }
+        } else {
+            localState = createDefaultLocalState();
+        }
     }
     normalizeState(localState);
     return localState;
+}
+
+function saveLocalState(state) {
+    if (!multiplayerMode && state === localState) {
+        sessionStorage.setItem('soloFarmState', JSON.stringify(state));
+    }
 }
 
 function normalizeState(state) {
@@ -131,6 +146,7 @@ function normalizeState(state) {
     state.farm.harvesterCapacity = getLocalHarvesterCapacity(state);
     state.farm.truckCapacity = getLocalTruckCapacity(state);
     state.farm.seederCapacity = getLocalSeederCapacity(state);
+    saveLocalState(state);
     return state;
 }
 
@@ -364,6 +380,17 @@ function handleLocalApi(path, options = {}) {
             normalizeState(state);
             return { success: true };
         }
+        if (category === 'lands') {
+            if (itemId === 'field_1') return { success: false, message: 'Nao e possivel vender o campo principal' };
+            const idx = state.farm.unlockedLands.indexOf(itemId);
+            if (idx === -1) return { success: false, message: 'Terra nao encontrada' };
+            const model = LOCAL_CATALOG.lands[itemId];
+            if (!model) return { success: false, message: 'Modelo invalido' };
+            state.farm.unlockedLands.splice(idx, 1);
+            state.farm.money += Math.floor(model.price * 0.8);
+            normalizeState(state);
+            return { success: true };
+        }
         return { success: false, message: 'Categoria invalida' };
     }
 
@@ -481,6 +508,9 @@ function handleLocalApi(path, options = {}) {
 }
 
 async function apiJson(path, options = {}) {
+    if (!multiplayerMode) {
+        return handleLocalApi(path, options);
+    }
     if (!API) {
         useLocalFallback('sem backend configurado para este host');
         return handleLocalApi(path, options);
@@ -497,6 +527,7 @@ async function apiJson(path, options = {}) {
 
 // === Entities ===
 let player;
+let playerNameTag;
 let cropsGroup, soilGfx;
 let fieldSprites = {};
 let decoGroup;
@@ -662,6 +693,9 @@ function create() {
 
     // Player spawns around Farm House
     player = this.add.sprite(HOUSE_POS.x + 50, HOUSE_POS.y + 50, 'p_down').setDepth(4);
+    playerNameTag = this.add.text(player.x, player.y - 40, '', { 
+        fontSize: '14px', fill: '#ffffff', stroke: '#000000', strokeThickness: 3, padding: {x:4, y:2} 
+    }).setOrigin(0.5).setDepth(5).setVisible(false);
     this.cameras.main.startFollow(player);
 
     // Input
@@ -717,20 +751,11 @@ function create() {
         } catch (e) {
             console.warn("Falha no catálogo, usando fallback local");
         }
-
         try {
             await fetchState();
         } catch (e) {
-            console.warn("Falha no estado, usando fallback local");
-
-            // fallback manual
-            lastState = {
-                farm: {
-                    soil: {},
-                    plantedCrops: {},
-                    lands: []
-                }
-            };
+            console.warn("Falha no estado, usando fallback local completo");
+            lastState = ensureLocalState();
         }
 
         console.log("Phaser: Initial sync complete (com fallback)");
@@ -1689,6 +1714,13 @@ function runVehicleLogic(veh, isControlled) {
     const state = veh.autoDriveState;
     if (!veh.workedTiles) veh.workedTiles = new Set();
 
+    // In multiplayer, passengers should NOT run any physics/logic
+    // They just follow the updates from vehicleUpdated event
+    const isMPPassenger = multiplayerMode && socket && veh.driverId && veh.driverId !== socket.id;
+    if (isMPPassenger && isControlled) {
+        return;
+    }
+
     // 1. Sync global variables for active vehicle (Shim for legacy compatibility inside this function)
     const isVehActive = isControlled;
     const engineOn = veh.engineOn;
@@ -1704,12 +1736,18 @@ function runVehicleLogic(veh, isControlled) {
     let throttleReverse = false;
 
     if (isVehActive && !veh.autoDriveEnabled) {
-        veh.clutchPressed = !!(keys.shift && keys.shift.isDown);
-        clutchPressed = veh.clutchPressed;
-        veh.isBraking = !!(keys.space && keys.space.isDown);
-        braking = veh.isBraking;
-        throttleForward = keys.w.isDown;
-        throttleReverse = keys.s.isDown;
+        // In multiplayer, only process inputs if WE are the driver
+        const isMPPassenger = multiplayerMode && socket && veh.driverId && veh.driverId !== socket.id;
+        if (isMPPassenger) {
+            // Passenger: no controls, just follow
+        } else {
+            veh.clutchPressed = !!(keys.shift && keys.shift.isDown);
+            clutchPressed = veh.clutchPressed;
+            veh.isBraking = !!(keys.space && keys.space.isDown);
+            braking = veh.isBraking;
+            throttleForward = keys.w.isDown;
+            throttleReverse = keys.s.isDown;
+        }
     }
 
     // Auto Drive Logic Override
@@ -1943,12 +1981,21 @@ function update() {
         player.setVisible(false);
         vehiclePositions[activeVeh.id] = { x: activeVeh.sprite.x, y: activeVeh.sprite.y };
 
+        // Reposition own name tag above vehicle
+        if (playerNameTag) {
+            let offsetY = -40;
+            if (activeVeh.driverId === socket.id) offsetY = -60;
+            else offsetY = -35; // Passenger offset
+            playerNameTag.setPosition(player.x, player.y + offsetY).setVisible(true);
+        }
+
         updateDashboard();
         refreshStatusHUD();
         refreshGearHUD();
     } else {
         // Player on foot movement
         player.setVisible(true);
+        if (playerNameTag) playerNameTag.setPosition(player.x, player.y - 40).setVisible(true);
         let vx = 0, vy = 0;
         if (keys.a.isDown) vx = -3;
         if (keys.d.isDown) vx = 3;
@@ -1987,9 +2034,11 @@ function update() {
             const hImpl = implementSprites.find(i => i.hitchedTo === v.id);
             if (hImpl && hImpl.sprite) {
                 const dist = TILE * 1.5;
-                hImpl.sprite.x = v.sprite.x - Math.cos(v.angle) * dist;
-                hImpl.sprite.y = v.sprite.y - Math.sin(v.angle) * dist;
-                hImpl.sprite.rotation = v.angle;
+                // Use sprite rotation to support both local physics and remote sync
+                const rot = v.sprite.rotation;
+                hImpl.sprite.x = v.sprite.x - Math.cos(rot) * dist;
+                hImpl.sprite.y = v.sprite.y - Math.sin(rot) * dist;
+                hImpl.sprite.rotation = rot;
                 implementPositions[hImpl.id] = { x: hImpl.sprite.x, y: hImpl.sprite.y };
             }
         }
@@ -2010,15 +2059,26 @@ function update() {
                 vehicleId: activeVeh ? activeVeh.id : null
             });
 
-            // Sync Vehicle Movement (if we are the driver)
-            if (activeVeh) {
+            // Sync Vehicle Movement only if WE are the driver
+            if (activeVeh && (!multiplayerMode || !activeVeh.driverId || activeVeh.driverId === socket.id)) {
+                // Determine implement state for tractors
+                let impOn = false;
+                if (activeVeh.type === 'tractor') {
+                    const hImpl = implementSprites.find(i => i.hitchedTo === activeVeh.id);
+                    if (hImpl) impOn = hImpl.isOn;
+                }
+
                 socket.emit('vehicleUpdate', {
                     id: activeVeh.id,
                     x: activeVeh.sprite.x,
                     y: activeVeh.sprite.y,
                     angle: activeVeh.sprite.rotation,
                     velocity: activeVeh.velocity,
-                    isOn: activeVeh.engineOn
+                    isOn: activeVeh.engineOn,
+                    gear: activeVeh.gear,
+                    rpm: activeVeh.rpm,
+                    fuel: activeVeh.fuel,
+                    toolOn: activeVeh.type === 'harvester' ? activeVeh.toolOn : impOn
                 });
             }
 
@@ -2199,6 +2259,19 @@ function shouldWorkTile(veh, tx, ty) {
     const soil = lastState.farm.soil[soilKey];
     const st = typeof soil === 'object' ? soil.state : (soil || 'normal');
 
+    // 1. Verificar se a tile está TOTALMENTE dentro de alguma terra desbloqueada (Alinhamento 64px)
+    let inField = false;
+    if (lastState.farm.unlockedLands) {
+        for (const fid of lastState.farm.unlockedLands) {
+            const f = catalog.lands[fid];
+            if (f && tx >= f.x && (tx + 64) <= (f.x + f.w) && ty >= f.y && (ty + 64) <= (f.y + f.h)) {
+                inField = true;
+                break;
+            }
+        }
+    }
+    if (!inField) return false;
+
     // Se já foi trabalhado por ESTA máquina nesta sessão de autodrive, ignora
     if (veh.autoDriveEnabled && veh.autoDriveState.workedTiles.has(soilKey)) return false;
 
@@ -2263,7 +2336,8 @@ function ensureVehicles() {
     if (!lastState || !catalog) return;
     const scene = game.scene.scenes[0];
     if (!scene) return;
-    const vehicles = lastState.farm.inventory.vehicles || [];
+    const vehicles = multiplayerMode ? Object.values(lastState.vehicles || {}) : (lastState.farm.inventory.vehicles || []);
+    console.log(`[ensureVehicles] Modo: ${multiplayerMode ? 'Multi' : 'Solo'}, Total: ${vehicles.length}, CatalogOK: ${!!catalog.vehicles}`);
     const activeIds = new Set(vehicles.map(v => v.id));
 
     vehicleSprites = vehicleSprites.filter(v => {
@@ -2285,15 +2359,20 @@ function ensureVehicles() {
         if (existing) {
             return;
         }
-        if (!spawnedVehicleIds.has(veh.id) && catalog.vehicles[modelId]) {
-            const pos = getNextParkingSpot('vehicle');
-            if (!pos) {
-                console.warn("Sem espaço de parking para veículo:", veh.id);
+        if (!spawnedVehicleIds.has(veh.id)) {
+            const model = catalog.vehicles[modelId];
+            if (!model) {
+                console.warn(`[ensureVehicles] Modelo ${modelId} não encontrado para ${veh.id}. Catalog keys:`, Object.keys(catalog.vehicles));
                 return;
             }
-            const model = catalog.vehicles[modelId];
             const texKey = 'v_' + modelId;
-            const sprite = scene.add.sprite(pos.x, pos.y, texKey).setDepth(3).setRotation(1.5708);
+            let startX = veh.x, startY = veh.y;
+            if (startX === undefined || startY === undefined) {
+                const pos = getNextParkingSpot('vehicle');
+                if (pos) { startX = pos.x; startY = pos.y; }
+                else { console.warn("Sem espaço de parking para veículo:", veh.id); return; }
+            }
+            const sprite = scene.add.sprite(startX, startY, texKey).setDepth(3).setRotation(veh.rotation || 1.5708);
             vehicleSprites.push({
                 id: veh.id,
                 modelId,
@@ -2331,7 +2410,7 @@ function ensureVehicles() {
                     posCheckFrame: 0
                 }
             });
-            vehiclePositions[veh.id] = { x: pos.x, y: pos.y };
+            vehiclePositions[veh.id] = { x: startX, y: startY };
             spawnedVehicleIds.add(veh.id);
         }
     });
@@ -2341,7 +2420,7 @@ function ensureImplements() {
     if (!lastState || !catalog) return;
     const scene = game.scene.scenes[0];
     if (!scene) return;
-    const implementsArr = lastState.farm.inventory.implements || [];
+    const implementsArr = multiplayerMode ? Object.values(lastState.implements || {}) : (lastState.farm.inventory.implements || []);
     const activeIds = new Set(implementsArr.map(i => i.id));
 
     implementSprites = implementSprites.filter(impl => {
@@ -2357,22 +2436,20 @@ function ensureImplements() {
 
     implementsArr.forEach(implItem => {
         if (spawnedImplementIds.has(implItem.id)) return;
-
         if (!catalog.implements[implItem.modelId]) return;
-        const impl = catalog.implements[implItem.modelId];
 
-        // Encontrar próximo espaço livre no galpão
-        const pos = getNextParkingSpot('implement');
-        if (!pos) {
-            console.warn("Sem espaço no galpão para implemento:", implItem.id);
-            return;
-        }
-
+        const model = catalog.implements[implItem.modelId];
         const texKey = 'impl_' + implItem.modelId;
-        const sprite = scene.add.sprite(pos.x, pos.y, texKey).setDepth(2).setRotation(1.5708);
+        let startX = implItem.x, startY = implItem.y;
+        if (startX === undefined || startY === undefined) {
+            const pos = getNextParkingSpot('implement');
+            if (pos) { startX = pos.x; startY = pos.y; }
+            else { console.warn("Sem espaço de galpão para implemento:", implItem.id); return; }
+        }
+        const sprite = scene.add.sprite(startX, startY, texKey).setDepth(2).setRotation(implItem.rotation || 1.5708);
 
-        implementSprites.push({ id: implItem.id, modelId: implItem.modelId, type: impl.type, sprite, lastX: pos.x, lastY: pos.y, isOn: false, hitchedTo: null });
-        implementPositions[implItem.id] = { x: pos.x, y: pos.y };
+        implementSprites.push({ id: implItem.id, modelId: implItem.modelId, type: model.type, sprite, lastX: startX, lastY: startY, isOn: false, hitchedTo: implItem.attachedToVehicleId || implItem.hitchedTo || null });
+        implementPositions[implItem.id] = { x: startX, y: startY };
         spawnedImplementIds.add(implItem.id);
     });
 }
@@ -2384,12 +2461,23 @@ async function triggerImpl(veh, tx, ty) {
     const hImpl = implementSprites.find(i => i.hitchedTo === veh.id);
     if (!hImpl) return;
 
+    // Only the driver triggers actions in multiplayer
+    if (multiplayerMode && socket && socket.connected && veh.driverId !== socket.id) return;
+
     // Contagem de área trabalhada global (Sync via servidor)
     const tileKey = `${tx},${ty}`;
     // workedTiles removido pois o monitor agora usa o solo global do lastState
 
 
     const implType = hImpl.type;
+    if (multiplayerMode && socket && socket.connected) {
+        console.log(`[NET] Emitting action for ${implType} at ${tx},${ty}`);
+        if (implType === 'plow') socket.emit('actionPlow', { x: tx, y: ty });
+        else if (implType === 'harrow') socket.emit('actionHarrow', { x: tx, y: ty, dir: veh.lastMoveDir || 'h' });
+        else if (implType === 'seeder') socket.emit('actionPlant', { x: tx, y: ty, implementId: hImpl.id });
+        return;
+    }
+
     let ep = '', body = { x: tx, y: ty };
     if (implType === 'plow') ep = '/action/plow';
     if (implType === 'harrow') { ep = '/action/harrow'; body.dir = veh.lastMoveDir || 'h'; }
@@ -2403,8 +2491,10 @@ async function triggerImpl(veh, tx, ty) {
 async function triggerHarvest(veh, tx, ty) {
     if (!lastState || lastState.farm.harvesterStorage >= lastState.farm.harvesterCapacity) return;
 
-    // Sincronização global via servidor
-    const tileKey = `${tx},${ty}`;
+    if (multiplayerMode && socket && socket.connected) {
+        socket.emit('actionHarvest', { x: tx, y: ty });
+        return;
+    }
 
     try {
         const d = await apiJson('/action/harvest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x: tx, y: ty }) });
@@ -2415,47 +2505,8 @@ async function triggerHarvest(veh, tx, ty) {
 // ============================================================
 //  KEY HANDLERS
 // ============================================================
-function doToggleVehicle() {
-    if (shopOpen) return;
 
-    if (activeVehIdx >= 0) {
-        // Saindo do veículo
-        const veh = getActiveVehicle();
-        if (multiplayerMode && socket && socket.connected) {
-            socket.emit('exitVehicle');
-        }
-        activeVehIdx = -1;
-        player.setVisible(true);
-        refreshStatusHUD();
-        refreshGearHUD();
-        showToast('Você saiu do veículo');
-    } else {
-        // Tentando entrar em um veículo próximo
-        for (let i = 0; i < vehicleSprites.length; i++) {
-            const v = vehicleSprites[i];
-            if (near(player, v.sprite, 80)) {
-                activeVehIdx = i;
-                player.setVisible(false);
 
-                // Auto-ativar monitor de campo para máquinas avançadas
-                const m = getVehicleModel(v);
-                if (m && Number(m.gears) === 6 && m.autoDrive) {
-                    console.log("Auto-ativando monitor para:", m.name, "Gears:", m.gears);
-                    monitorVisible = true;
-                    // Forçar atualização da UI no próximo frame de render
-                }
-
-                if (multiplayerMode && socket && socket.connected) {
-                    socket.emit('enterVehicle', { vehicleId: v.id });
-                }
-                refreshStatusHUD();
-                refreshGearHUD();
-                showToast(`Você entrou em: ${v.modelId}`);
-                return;
-            }
-        }
-    }
-}
 function doShiftUp() {
     const veh = getActiveVehicle();
     if (activeVehIdx < 0 || transMode !== 'manual' || (veh && veh.autoDriveEnabled)) return;
@@ -2580,101 +2631,109 @@ function doStall() {
 }
 
 function doToggleHitch() {
-    if (!isInTractor()) return;
+    if (activeVehIdx < 0) return;
     const veh = getActiveVehicle();
-    if (!veh) return;
+    if (!veh || veh.type !== 'tractor') return;
 
-    // Desengate se já houver algo
-    if (veh.attachedImplementId) {
-        const imp = implementSprites.find(i => i.id === veh.attachedImplementId);
-        if (imp) {
-            console.log(`Desengatando: ${imp.id}`);
-            imp.isOn = false;
-            imp.hitchedTo = null;
-        }
-        veh.attachedImplementId = null;
-        disableAutoDrive(veh, 'AUTO DRIVE: OFF - implemento desacoplado', 'warning');
-        refreshStatusHUD();
+    // In multiplayer, check driver permission (driverId may not be set yet if solo)
+    if (multiplayerMode && socket && veh.driverId && veh.driverId !== socket.id) {
+        showToast('Somente o motorista pode engatar!', 'error');
         return;
     }
 
-    // Buscar implemento livre próximo
-    for (const impl of implementSprites) {
-        // Segurança: Verificar se já não está preso a OUTRO veículo
-        if (impl.hitchedTo) continue;
-
-        const d = Phaser.Math.Distance.Between(veh.sprite.x, veh.sprite.y, impl.sprite.x, impl.sprite.y);
-
-        if (d < 85) {
-            console.log(`Engatando implemento: ${impl.id} no veículo ${veh.id}`);
-            veh.attachedImplementId = impl.id;
-            impl.hitchedTo = veh.id;
-            refreshStatusHUD();
-            showToast("Implemento Acoplado", "success");
-            return;
+    const hitched = implementSprites.find(i => i.hitchedTo === veh.id);
+    if (hitched) {
+        if (multiplayerMode && socket && socket.connected) {
+            // Apply locally immediately for instant feedback
+            hitched.hitchedTo = null;
+            hitched.isOn = false;
+            showToast('Implemento desengatado', 'warning');
+            socket.emit('detachImplement', { vehicleId: veh.id });
+            console.log('[DETACH IMPLEMENT] sent', veh.id);
+        } else {
+            hitched.hitchedTo = null;
+            hitched.isOn = false;
+            showToast('Implemento desengatado', 'warning');
+        }
+    } else {
+        const nearImpl = implementSprites.find(i => !i.hitchedTo && near(veh.sprite, i.sprite, 60));
+        if (nearImpl) {
+            if (multiplayerMode && socket && socket.connected) {
+                // Apply locally immediately for instant feedback
+                nearImpl.hitchedTo = veh.id;
+                showToast('Implemento engatado!', 'success');
+                socket.emit('attachImplement', { vehicleId: veh.id, implementId: nearImpl.id });
+                console.log('[ATTACH IMPLEMENT] sent', veh.id, nearImpl.id);
+            } else {
+                nearImpl.hitchedTo = veh.id;
+                showToast('Implemento engatado!', 'success');
+            }
         }
     }
-    console.log("Nenhum implemento disponível próximo.");
 }
 
 function doToggleVehicle() {
     if (shopOpen) return;
 
-    // Clear stall/machine state before switching
-    const currentVeh = getActiveVehicle();
-    if (currentVeh) currentVeh.isEngineStalling = false;
-    refreshStatusHUD();
-
-    // Exit
     if (activeVehIdx >= 0) {
-        const veh = vehicleSprites[activeVehIdx];
-        // O AutoDrive deve CONTINUAR funcionando ao sair
-        activeVehIdx = -1;
-
-        player.setVisible(true);
-        player.x = veh.sprite.x + TILE;
-        player.y = veh.sprite.y;
-        player.rotation = 0;
-        // veh.sprite.rotation is NOT reset to 0, stays at current angle
-
-        const scene = this.scene ? this : game.scene.scenes[0];
-        scene.cameras.main.startFollow(player);
-
-        document.getElementById('dashboard').style.display = 'none';
-        const mon = document.getElementById('field-monitor');
-        if (mon) mon.style.display = 'none';
-        monitorVisible = false;
-
-        refreshGearHUD();
-        return;
-    }
-
-    // Enter nearest
-    let best = -1, bd = Infinity;
-    vehicleSprites.forEach((v, i) => {
-        const d = Phaser.Math.Distance.Between(player.x, player.y, v.sprite.x, v.sprite.y);
-        if (d < 60 && d < bd) { best = i; bd = d; }
-    });
-    if (best >= 0) {
-        activeVehIdx = best;
-        const activeVehicle = vehicleSprites[best];
-        const m = catalog.vehicles[activeVehicle.modelId];
-
-        maxGears = (m?.gears || 4);
-        transMode = (m?.gearType === 'auto') ? 'auto' : 'manual';
-
-        // Auto-ativar monitor de campo para máquinas avançadas
-        if (Number(maxGears) === 6 && (m?.autoDrive)) {
-            monitorVisible = true;
+        // Saindo do veículo
+        const veh = getActiveVehicle();
+        if (multiplayerMode && socket && socket.connected) {
+            socket.emit('exitVehicle');
         }
-
-        // NÃO resetar AutoDrive ao entrar! 
-        // Apenas atualizar HUD
-        highlightVehicle(-1);
-        this.cameras.main.startFollow(activeVehicle.sprite);
-        document.getElementById('dashboard').style.display = 'flex';
-        updateDashboard();
+        activeVehIdx = -1;
+        player.setVisible(true);
+        refreshStatusHUD();
         refreshGearHUD();
+        showToast('Você saiu do veículo');
+        const scene = game.scene.scenes[0];
+        if (scene && scene.cameras) {
+            scene.cameras.main.startFollow(player);
+        }
+    } else {
+        // Enter nearest
+        let best = -1, bd = Infinity;
+        vehicleSprites.forEach((v, i) => {
+            const d = Phaser.Math.Distance.Between(player.x, player.y, v.sprite.x, v.sprite.y);
+            if (d < 80 && d < bd) { best = i; bd = d; }
+        });
+        if (best >= 0) {
+            activeVehIdx = best;
+            const activeVehicle = vehicleSprites[best];
+            const m = catalog.vehicles[activeVehicle.modelId];
+
+            player.setVisible(false);
+
+            if (multiplayerMode && socket && socket.connected) {
+                socket.emit('enterVehicle', { vehicleId: activeVehicle.id });
+                // Set driver locally immediately (server will confirm via vehicleOccupantsUpdated)
+                if (!activeVehicle.driverId) {
+                    activeVehicle.driverId = socket.id;
+                    activeVehicle.isMyDriver = true;
+                }
+                console.log('[ENTER VEHICLE] sent', activeVehicle.id, 'driverId:', activeVehicle.driverId);
+            }
+
+            maxGears = (m?.gears || 4);
+            transMode = (m?.gearType === 'auto') ? 'auto' : 'manual';
+
+            // Auto-ativar monitor de campo para máquinas avançadas
+            if (Number(maxGears) === 6 && (m?.autoDrive)) {
+                console.log("Auto-ativando monitor para:", m.name, "Gears:", m.gears);
+                monitorVisible = true;
+            }
+
+            highlightVehicle(-1);
+            const scene = game.scene.scenes[0];
+            if (scene && scene.cameras) {
+                scene.cameras.main.startFollow(activeVehicle.sprite);
+            }
+            document.getElementById('dashboard').style.display = 'flex';
+            refreshStatusHUD();
+            updateDashboard();
+            refreshGearHUD();
+            showToast(`Entrou em: ${m ? m.name : 'Veículo'}`);
+        }
     }
 }
 
@@ -3245,347 +3304,235 @@ function renderCellphoneMenu(cat) {
     const inv = lastState.farm.inventory;
 
     if (cat === 'vehicles') {
-        for (const [id, it] of Object.entries(catalog.vehicles)) {
-            const afford = lastState.farm.money >= it.price;
-            html += `<div class="cp-item">
-                <div class="cp-name">${it.name}</div>
-                <div class="cp-price">$${it.price}</div>
-                <button class="cp-btn-buy" onclick="buyCellphoneItem('vehicles','${id}')" ${!afford ? 'disabled' : ''}>Comprar</button>
-            </div>`;
+        const types = { tractor: '🚜 Tratores', harvester: '🌾 Colheitadeiras', truck: '🚚 Caminhões' };
+        for (const typeKey in types) {
+            let sectionHtml = `<div class="cp-category-title">${types[typeKey]}</div>`;
+            let hasItems = false;
+            for (const [id, it] of Object.entries(catalog.vehicles)) {
+                if (it.type !== typeKey || it.price <= 0) continue;
+                const afford = lastState.farm.money >= it.price;
+                sectionHtml += `<div class="cp-item">
+                    <div class="cp-name">${it.name}</div>
+                    <div class="cp-price">$${it.price.toLocaleString()}</div>
+                    <button class="cp-btn-buy" onclick="buyCellphoneItem('vehicles','${id}')" ${!afford ? 'disabled' : ''}>Comprar</button>
+                </div>`;
+                hasItems = true;
+            }
+            if (hasItems) html += sectionHtml;
         }
     } else if (cat === 'implements') {
-        for (const [id, it] of Object.entries(catalog.implements)) {
-            const afford = lastState.farm.money >= it.price;
-            html += `<div class="cp-item">
-                <div class="cp-name">${it.name}</div>
-                <div class="cp-price">$${it.price}</div>
-                <button class="cp-btn-buy" onclick="buyCellphoneItem('implements','${id}')" ${!afford ? 'disabled' : ''}>Comprar</button>
-            </div>`;
+        const types = { plow: '🚜 Arados', harrow: '⚙️ Grades', seeder: '🌱 Plantadeiras' };
+        for (const typeKey in types) {
+            let sectionHtml = `<div class="cp-category-title">${types[typeKey]}</div>`;
+            let hasItems = false;
+            for (const [id, it] of Object.entries(catalog.implements)) {
+                if (it.type !== typeKey || it.price <= 0) continue;
+                const afford = lastState.farm.money >= it.price;
+                sectionHtml += `<div class="cp-item">
+                    <div class="cp-name">${it.name}</div>
+                    <div class="cp-price">$${it.price.toLocaleString()}</div>
+                    <button class="cp-btn-buy" onclick="buyCellphoneItem('implements','${id}')" ${!afford ? 'disabled' : ''}>Comprar</button>
+                </div>`;
+                hasItems = true;
+            }
+            if (hasItems) html += sectionHtml;
         }
     } else if (cat === 'seeds') {
         for (const [id, it] of Object.entries(catalog.seeds)) {
+            if (it.price <= 0) continue;
             const afford = lastState.farm.money >= it.price;
             html += `<div class="cp-item">
                 <div class="cp-name">🌱 ${it.name}</div>
-                <div class="cp-price">$${it.price}</div>
+                <div class="cp-price">$${it.price.toLocaleString()}</div>
                 <button class="cp-btn-buy" onclick="buyCellphoneItem('seeds','${id}')" ${!afford ? 'disabled' : ''}>Comprar</button>
             </div>`;
         }
     } else if (cat === 'sell') {
         const hitchedIds = new Set(implementSprites.filter(i => i.hitchedTo).map(i => i.id));
+        let hasItems = false;
 
         inv.vehicles.forEach(v => {
             const it = catalog.vehicles[v.modelId];
-            if (!it) return;
+            if (!it || it.price <= 0) return;
+            hasItems = true;
             const refund = Math.floor(it.price * 0.8);
             html += `<div class="cp-item">
                 <div class="cp-name">${it.name} (V)</div>
-                <div class="cp-price">Receber: $${refund}</div>
+                <div class="cp-price">Receber: $${refund.toLocaleString()}</div>
                 <button class="cp-btn-sell" onclick="sellCellphoneItem('vehicles','${v.id}')">Vender</button>
             </div>`;
         });
         inv.implements.forEach(i => {
             const it = catalog.implements[i.modelId];
-            if (!it) return;
+            if (!it || it.price <= 0) return;
+            hasItems = true;
             const isHitched = hitchedIds.has(i.id);
             const refund = Math.floor(it.price * 0.8);
             html += `<div class="cp-item">
                 <div class="cp-name">${it.name} (I)</div>
-                <div class="cp-price">Receber: $${refund}</div>
+                <div class="cp-price">Receber: $${refund.toLocaleString()}</div>
                 <button class="cp-btn-sell" onclick="sellCellphoneItem('implements','${i.id}')" ${isHitched ? 'disabled' : ''}>${isHitched ? 'ENGATADO' : 'Vender'}</button>
             </div>`;
         });
-        if (inv.vehicles.length === 0 && inv.implements.length === 0) {
-            html += '<div style="color:#94a3b8; text-align:center; padding: 20px;">Inventário vazio.</div>';
+        
+        // Terras (Ocultando field_1 que não pode ser vendido)
+        if (lastState.farm.unlockedLands) {
+            lastState.farm.unlockedLands.forEach(fid => {
+                if (fid === 'field_1') return; // Campo inicial não pode ser vendido
+                const land = catalog.lands[fid];
+                if (!land || land.price <= 0) return;
+                hasItems = true;
+                const refund = Math.floor(land.price * 0.8);
+                html += `<div class="cp-item">
+                    <div class="cp-name">${land.name} (Terra)</div>
+                    <div class="cp-price">Receber: $${refund.toLocaleString()}</div>
+                    <button class="cp-btn-sell" onclick="sellCellphoneItem('lands','${fid}')">Vender</button>
+                </div>`;
+            });
+        }
+
+        if (!hasItems) {
+            html += '<div style="color:#94a3b8; text-align:center; padding: 20px;">Você não possui itens valiosos para vender.</div>';
+
         }
     }
     cont.innerHTML = html;
 }
 
 async function buyCellphoneItem(cat, id) {
+    if (multiplayerMode) {
+        socket.emit('shopBuy', { category: cat, itemId: id }, async (res) => {
+            if (res && res.success) {
+                showBigAlert(`${catalog[cat][id].name} comprado com sucesso!`);
+                await fetchState();
+                renderCellphoneMenu(cat);
+                ensureVehicles();
+                ensureImplements();
+            } else {
+                showToast(res ? res.error : 'Erro na compra', 'error');
+            }
+        });
+        return;
+    }
     try {
         const d = await apiJson('/shop/buy', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ category: cat, itemId: id })
         });
-        if (d.success) { await fetchState(); renderCellphoneMenu(cat); ensureVehicles(); ensureImplements(); }
+        if (d.success) { 
+            showBigAlert(`${catalog[cat][id].name} comprado com sucesso!`);
+            await fetchState(); 
+            renderCellphoneMenu(cat); 
+            ensureVehicles(); 
+            ensureImplements(); 
+        } else {
+            showToast(d.error || 'Erro na compra', 'error');
+        }
     } catch (e) { }
 }
 
-async function sellCellphoneItem(cat, id) {
-    if (cat === 'implements') {
-        const isHitched = implementSprites.some(i => i.id === id && i.hitchedTo);
-        if (isHitched) {
-            showToast('Desengate o implemento antes de vender', 'error');
-            return;
-        }
+async function sellCellphoneItem(cat, idx) {
+    if (multiplayerMode) {
+        socket.emit('shopSell', { category: cat, itemId: idx }, async (res) => {
+            if (res && res.success) {
+                let itemName = "Item";
+                if (cat === 'lands' && catalog.lands[idx]) itemName = catalog.lands[idx].name;
+                else if (catalog[cat]) {
+                    const invItem = lastState.farm.inventory[cat].find(i => i.id === idx);
+                    if (invItem && catalog[cat][invItem.modelId]) itemName = catalog[cat][invItem.modelId].name;
+                }
+                showBigAlert(`${itemName} vendido com sucesso!`);
+                await fetchState();
+                renderCellphoneMenu(cat);
+                ensureVehicles();
+                ensureImplements();
+            } else {
+                showToast(res ? res.error : 'Erro na venda', 'error');
+            }
+        });
+        return;
     }
     try {
         const d = await apiJson('/shop/sell', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category: cat, itemId: id })
+            body: JSON.stringify({ category: cat, index: idx })
         });
-        if (d.success) { await fetchState(); renderCellphoneMenu('sell'); ensureVehicles(); ensureImplements(); }
-    } catch (e) { }
-}
-function openShop() {
-    shopOpen = true;
-    document.getElementById('shop-modal').style.display = 'flex';
-    renderShop('vehicles');
-}
-function closeShop() {
-    shopOpen = false;
-    document.getElementById('shop-modal').style.display = 'none';
-    fetchState();
-}
-function switchTab(tab) {
-    shopTab = tab;
-    document.querySelectorAll('.shop-tab').forEach(b => b.classList.remove('active'));
-    const el = document.getElementById('tab-' + tab);
-    if (el) el.classList.add('active');
-    renderShop(tab);
-}
-function renderShop(cat) {
-    if (!catalog || !lastState) return;
-    const cont = document.getElementById('shop-content');
-    const inv = lastState.farm.inventory;
-    let html = '';
-
-    if (cat === 'vehicles') {
-        const types = ['tractor', 'harvester', 'truck'];
-        const typeNames = { 'tractor': 'Tratores', 'harvester': 'Colheitadeiras', 'truck': 'Caminhões' };
-        const vehicleCounts = {};
-        inv.vehicles.forEach(v => { vehicleCounts[v.modelId] = (vehicleCounts[v.modelId] || 0) + 1; });
-
-        types.forEach(type => {
-            let sectionHtml = `<div class="shop-category-title">${typeNames[type]}</div>`;
-            let hasItems = false;
-            for (const [id, it] of Object.entries(catalog.vehicles)) {
-                if (it.type !== type) continue;
-                hasItems = true;
-                const afford = lastState.farm.money >= it.price;
-                const trans = it.gearType === 'auto' ? 'A' : 'M';
-                const stat = type === 'tractor'
-                    ? `<span>HP: <b>${it.hp}</b></span> <span>Marchas: <b>${trans}${it.gears}</b></span>`
-                    : `<span>Cap: <b>${it.capacity}L</b></span> <span>HP: <b>${it.hp}</b></span> <span>Marchas: <b>${trans}${it.gears}</b></span>`;
-                const qty = vehicleCounts[id] || 0;
-
-                sectionHtml += `<div class="shop-item">
-                    ${it.autoDrive ? '<div class="si-autodrive">AUTODRIVE</div>' : ''}
-                    <div class="si-brand">${it.brand}</div>
-                    <div class="si-name">${it.name}</div>
-                    <div class="si-stats">${stat}</div>
-                    <div class="si-price">${it.price > 0 ? '$' + it.price : 'Grátis'}</div>
-                    <div class="si-stats" style="text-align:center;">Na Fazenda: ${qty}</div>
-                    <button onclick="buyItem('vehicles','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>
-                </div>`;
+        if (d.success) { 
+            let itemName = "Item";
+            if (cat === 'lands' && catalog.lands[idx]) itemName = catalog.lands[idx].name;
+            else if (catalog[cat]) {
+                const invItem = lastState.farm.inventory[cat].find(i => i.id === idx);
+                if (invItem && catalog[cat][invItem.modelId]) itemName = catalog[cat][invItem.modelId].name;
             }
-            if (hasItems) html += sectionHtml;
-        });
-    } else if (cat === 'implements') {
-        const implementCounts = {};
-        inv.implements.forEach(i => { implementCounts[i.modelId] = (implementCounts[i.modelId] || 0) + 1; });
-        for (const [id, it] of Object.entries(catalog.implements)) {
-            const afford = lastState.farm.money >= it.price;
-            let stat = `<span>Requisito: <b>${it.requiredHp}HP</b></span> <span>Largura: <b>${it.width}</b></span>`;
-            if (it.capacity) stat += `<span>Capacidade: <b>${it.capacity}</b></span>`;
-            if (it.lines) stat += `<span>Linhas: <b>${it.lines}L</b></span>`;
-            const qty = implementCounts[id] || 0;
-            html += `<div class="shop-item">
-                <div class="si-brand">IMPLEMENTO</div>
-                <div class="si-name">${it.name}</div>
-                <div class="si-stats">${stat}</div>
-                <div class="si-price">${it.price > 0 ? '$' + it.price : 'Grátis'}</div>
-                <div class="si-stats" style="text-align:center;">Na Fazenda: ${qty}</div>
-                <button onclick="buyItem('implements','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>
-            </div>`;
-        }
-    } else if (cat === 'seeds') {
-        for (const [id, it] of Object.entries(catalog.seeds)) {
-            const afford = lastState.farm.money >= it.price;
-            html += `<div class="shop-item">
-                <div class="si-name">🌱 ${it.name}</div>
-                <div class="si-stats"><span>Tipo</span> <span>Sementes</span></div>
-                <div class="si-price">$${it.price}</div>
-                <button onclick="buyItem('seeds','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>
-            </div>`;
-        }
-        html += `<div class="shop-info">Sementes no Silo da Casa: <b>${lastState.farm.seedDepot}</b></div>`;
-    } else if (cat === 'items') {
-        for (const [id, it] of Object.entries(catalog.items || {})) {
-            const owned = id === 'cellphone' ? lastState.farm.hasCellphone : false;
-            if (owned) continue; // Desaparece se já possui
-
-            const afford = lastState.farm.money >= it.price;
-            html += `<div class="shop-item">
-                <div class="si-brand">ELETRÔNICOS</div>
-                <div class="si-name">📱 ${it.name}</div>
-                <div class="si-stats"><span>Utilidade</span> <span>Acesso Remoto</span></div>
-                <div class="si-price">$${it.price}</div>
-                <button onclick="buyItem('items','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>
-            </div>`;
-        }
-    } else if (cat === 'lands') {
-        for (const [id, it] of Object.entries(catalog.lands)) {
-            const owned = lastState.farm.unlockedLands.includes(id);
-            const afford = lastState.farm.money >= it.price;
-            html += `<div class="shop-item ${owned ? 'owned' : ''}">
-                <div class="si-name">🗺️ ${it.name}</div>
-                <div class="si-stats"><span>Área</span> <span>${it.w / TILE}x${it.h / TILE} tiles</span></div>
-                <div class="si-price">${it.price > 0 ? '$' + it.price : 'Grátis'}</div>
-                ${owned ? '<span class="si-owned">✓ Possui</span>' :
-                    `<button onclick="buyItem('lands','${id}')" ${!afford ? 'disabled' : ''}>${afford ? 'Comprar' : '$$$'}</button>`}
-            </div>`;
-        }
-    } else if (cat === 'sell') {
-        html += `<div class="shop-category-title" style="color:#e74c3c; border-color:#e74c3c;">Vender Veículos</div>`;
-        if (inv.vehicles.length === 0) {
-            html += '<div class="shop-info">Você não possui veículos para vender.</div>';
+            showBigAlert(`${itemName} vendido com sucesso!`);
+            await fetchState(); 
+            renderCellphoneMenu('sell'); 
+            ensureVehicles(); 
+            ensureImplements(); 
         } else {
-            for (const vehicle of inv.vehicles) {
-                const it = catalog.vehicles[vehicle.modelId];
-                if (!it) continue;
-                const refund = Math.floor(it.price * 0.8);
-                html += `<div class="shop-item">
-                    <div class="si-brand">${it.brand}</div>
-                    <div class="si-name">${it.name}</div>
-                    <div class="si-stats"><span>ID:</span> <span>${vehicle.id}</span></div>
-                    <div class="si-price">💰 $${refund} (80%)</div>
-                    <button class="btn-sell" onclick="sellItem('vehicles','${vehicle.id}')">Vender</button>
-                </div>`;
-            }
-        }
-
-        html += `<div class="shop-category-title" style="color:#e74c3c; border-color:#e74c3c; margin-top:20px;">Vender Implementos</div>`;
-        if (inv.implements.length === 0) {
-            html += '<div class="shop-info">Você não possui implementos para vender.</div>';
-        } else {
-            // Verificar quais implementos estão engatados agora na simulação local
-            const hitchedIds = new Set(implementSprites.filter(i => i.hitchedTo).map(i => i.id));
-
-            for (const implement of inv.implements) {
-                const it = catalog.implements[implement.modelId];
-                if (!it) continue;
-                const isHitched = hitchedIds.has(implement.id);
-                const refund = Math.floor(it.price * 0.8);
-                html += `<div class="shop-item">
-                    <div class="si-name">${it.name}</div>
-                    <div class="si-stats"><span>ID:</span> <span>${implement.id}</span></div>
-                    <div class="si-price">💰 $${refund} (80%)</div>
-                    <button class="btn-sell" onclick="sellItem('implements','${implement.id}')" ${isHitched ? 'disabled title="Desengate o implemento antes de vender"' : ''}>${isHitched ? 'ENGATADO' : 'Vender'}</button>
-                </div>`;
-            }
-        }
-    }
-    cont.innerHTML = html;
-}
-
-async function buyItem(cat, id) {
-    try {
-        const d = await apiJson('/shop/buy', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category: cat, itemId: id })
-        });
-        if (d.success) {
-            await fetchState();
-            renderShop(shopTab);
-            ensureVehicles();
-            ensureImplements();
-            if (cat === 'items' && id === 'cellphone') {
-                showToast('Celular comprado! Aperte Z para acessar a Loja Rápida.', 'success');
-            }
+            showToast(d.error || 'Erro na venda', 'error');
         }
     } catch (e) { }
 }
 
-async function sellItem(cat, id) {
-    if (cat === 'implements') {
-        const isHitched = implementSprites.some(i => i.id === id && i.hitchedTo);
-        if (isHitched) {
-            showToast('Desengate o implemento antes de vender', 'error');
-            return;
-        }
+function showBigAlert(msg) {
+    let alertEl = document.getElementById('big-screen-alert');
+    if (!alertEl) {
+        alertEl = document.createElement('div');
+        alertEl.id = 'big-screen-alert';
+        document.body.appendChild(alertEl);
     }
+    alertEl.innerText = msg;
+    alertEl.className = 'big-alert-show';
+    
+    // Reproduzir som se possivel
     try {
-        const d = await apiJson('/shop/sell', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category: cat, itemId: id })
-        });
-        if (d.success) {
-            await fetchState();
-            renderShop('sell');
-            ensureVehicles();
-            ensureImplements();
-            updateHUD(lastState);
-        } else {
-            alert('Erro ao vender: ' + (d.message || 'Desconhecido'));
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
+            osc.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.15);
         }
-    } catch (e) {
-        console.error('Erro ao vender:', e);
-    }
-}
+    } catch (e) {}
 
-
-
-// ============================================================
-//  TIME
-// ============================================================
-function advanceHour() {
-    currentHour++;
-    if (currentHour >= 24) { currentHour = 0; forceTick(); }
-    if (lastState) { updateHUD(lastState); updateCrops(lastState.farm.plantedCrops); }
-}
-
-// ============================================================
-//  NETWORKING
-// ============================================================
-async function fetchCatalog() {
-    try {
-        const data = await apiJson('/shop/catalog');
-        if (data && data.vehicles) {
-            catalog = data;
-            // Garantir que items do LOCAL_CATALOG sempre existam no catálogo
-            if (!catalog.items) catalog.items = LOCAL_CATALOG.items;
-            console.log("Catálogo carregado com sucesso.");
-        }
-    } catch (e) {
-        console.warn("Usando catálogo local/fallback (API inacessível)");
-    }
-}
-async function fetchState() {
-    try {
-        const s = normalizeState(await apiJson('/state'));
-        lastState = s;
-        updateHUD(s); updateSoil(s.farm.soil); updateCrops(s.farm.plantedCrops);
-        updateFields(); renderLandZones(); ensureVehicles(); ensureImplements(); renderWorldMap();
-        isHydrated = true;
-    } catch (e) {
-        console.warn("Estado não atualizado:", e.message);
-    }
-}
-async function forceTick() {
-    try { await apiJson('/tick', { method: 'POST' }); fetchState(); } catch (e) { }
+    setTimeout(() => {
+        alertEl.className = 'big-alert-hide';
+    }, 2500);
 }
 
 async function syncFuel() {
     if (!isHydrated || !catalog) return;
     const vehFuelData = vehicleSprites.map(v => ({ id: v.id, fuel: v.fuel || 0 }));
     if (vehFuelData.length === 0) return;
-    try {
-        await apiJson('/action/sync-fuel', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ vehicles: vehFuelData })
-        });
-    } catch (e) { }
+    if (multiplayerMode) {
+        if (socket && socket.connected) socket.emit('syncFuel', { vehicles: vehFuelData });
+    } else {
+        try {
+            await apiJson('/action/sync-fuel', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vehicles: vehFuelData })
+            });
+        } catch (e) { }
+    }
 }
 
 async function doRefuel() {
     if (activeVehIdx < 0) return;
     const ent = getEntity();
     if (!near(ent, GAS_STATION_POS, 150)) return;
-
     const activeVehicle = getActiveVehicle();
     if (!activeVehicle) return;
+
+    if (multiplayerMode) {
+        if (activeVehicle.driverId !== socket.id) return showToast('Apenas o motorista pode abastecer', 'warning');
+        socket.emit('refuel', { vehicleId: activeVehicle.id });
+        return;
+    }
 
     try {
         const d = await apiJson('/action/refuel', {
@@ -3594,15 +3541,14 @@ async function doRefuel() {
         });
         if (d.success && d.newFuel !== undefined) {
             activeVehicle.fuel = d.newFuel;
-            await fetchState(); // Updates money visually
+            await fetchState();
             console.log("Refuel efetuado:", d.message);
-        } else {
-            console.log("Refuel falhou/negado:", d.message);
         }
     } catch (e) {
         console.error("Erro no refuel:", e);
     }
 }
+
 
 // ============================================================
 //  HUD
@@ -3754,7 +3700,8 @@ function updateSoil(soilObj) {
         const dir = typeof info === 'object' ? info.dir : null;
         if (st === 'normal') continue;
         const [sx, sy] = key.split(',').map(Number);
-        const l = sx - TILE / 2, t = sy - TILE / 2;
+        // Agora sx, sy representam o CANTO SUPERIOR ESQUERDO da tile para alinhar com o grid fsico
+        const l = sx, t = sy;
         if (st === 'plowed') {
             soilGfx.fillStyle(0x5c4033, 0.85); soilGfx.fillRect(l, t, TILE, TILE);
             soilGfx.lineStyle(2, 0x3b2f2f, 0.7);
@@ -3785,19 +3732,400 @@ function updateCrops(crops) {
         let k = 'crop_1', vg = c.growthStage;
         if (!c.isReady && !c.isDead) { vg += (currentHour / 24) * 20; if (vg > 100) vg = 100; }
         if (c.isReady) k = 'crop_3'; else if (vg > 50) k = 'crop_2';
-        const sp = scene.add.sprite(c.x, c.y, k).setDepth(1);
+        // Adiciona TILE/2 para centralizar o sprite no quadrado que comea em (c.x, c.y)
+        const sp = scene.add.sprite(c.x + TILE / 2, c.y + TILE / 2, k).setDepth(1);
         if (c.isDead) sp.setTint(0x7f8c8d);
         cropsGroup.add(sp);
     });
 }
 
+
+async function fetchCatalog() {
+    try {
+        const d = await apiJson('/shop/catalog');
+        catalog = d;
+        console.log("Catálogo carregado:", catalog);
+        // Garantir que entidades apareçam se o estado já chegou
+        if (lastState) {
+            ensureVehicles();
+            ensureImplements();
+        }
+    } catch (e) {
+        console.warn("Erro ao carregar catálogo:", e);
+    }
+}
+
+async function fetchState() {
+    if (multiplayerMode) return; // In multiplayer, state is pushed via socket
+    try {
+        const d = await apiJson('/state');
+        lastState = d;
+        isHydrated = true;
+        ensureVehicles();
+        ensureImplements();
+        updateHUD(lastState);
+        updateSoil(lastState.farm.soil);
+        updateCrops(lastState.farm.plantedCrops);
+    } catch (e) {
+        console.warn("Erro ao carregar estado:", e);
+    }
+}
+
+async function advanceHour() {
+    if (multiplayerMode) return;
+    try {
+        const d = await apiJson('/tick', { method: 'POST' });
+        if (d.success) await fetchState();
+    } catch (e) { }
+}
+
+function openShop() {
+    shopOpen = true;
+    const modal = document.getElementById('shop-modal');
+    if (modal) modal.style.display = 'flex';
+    const elMoney = document.getElementById('shop-money');
+    if (elMoney) elMoney.innerText = lastState?.farm?.money || 0;
+    switchTab('vehicles');
+}
+
+function closeShop() {
+    shopOpen = false;
+    const modal = document.getElementById('shop-modal');
+    if (modal) modal.style.display = 'none';
+    fetchState();
+}
+
+function switchTab(cat) {
+    if (!catalog) return;
+    const cont = document.getElementById('shop-content');
+    if (!cont) return;
+
+    const tabs = document.querySelectorAll('.shop-tab');
+    tabs.forEach(t => t.classList.remove('active'));
+
+    // Marcar aba ativa
+    const tabIds = { 'vehicles': 0, 'implements': 1, 'seeds': 2, 'items': 3, 'lands': 4, 'sell': 5 };
+    if (tabIds[cat] !== undefined) tabs[tabIds[cat]].classList.add('active');
+
+    if (cat === 'sell') {
+        renderSellMenuInShop();
+        return;
+    }
+
+    let html = '';
+    const items = catalog[cat];
+    if (items) {
+        if (cat === 'vehicles') {
+            const types = {
+                tractor: '🚜 Tratores',
+                harvester: '🌾 Colheitadeiras',
+                truck: '🚚 Caminhões'
+            };
+            
+            for (const typeKey in types) {
+                let hasItems = false;
+                let sectionHtml = `<h3 class="shop-category-title">${types[typeKey]}</h3><div class="shop-grid">`;
+                
+                for (const id in items) {
+                    const item = items[id];
+                    if (item.type !== typeKey || item.price <= 0) continue;
+                    hasItems = true;
+                    sectionHtml += `
+                        <div class="shop-card">
+                            <div class="shop-card-badge">${cat.toUpperCase()}</div>
+                            <div class="item-name">${item.name}</div>
+                            <div class="item-price">$${item.price.toLocaleString()}</div>
+                            <div class="item-desc">
+                                ${item.brand ? '<span class="brand">' + item.brand + '</span>' : ''}
+                            </div>
+                            <button class="buy-btn" onclick="buyItem('${cat}', '${id}')">
+                                <span>Adquirir</span>
+                            </button>
+                        </div>
+                    `;
+                }
+                sectionHtml += '</div>';
+                if (hasItems) html += sectionHtml;
+            }
+        } else if (cat === 'implements') {
+            const types = { plow: '🚜 Arados', harrow: '⚙️ Grades', seeder: '🌱 Plantadeiras' };
+            for (const typeKey in types) {
+                let hasItems = false;
+                let sectionHtml = `<h3 class="shop-category-title">${types[typeKey]}</h3><div class="shop-grid">`;
+                for (const id in items) {
+                    const item = items[id];
+                    if (item.type !== typeKey || item.price <= 0) continue;
+                    hasItems = true;
+                    sectionHtml += `
+                        <div class="shop-card">
+                            <div class="shop-card-badge">${cat.toUpperCase()}</div>
+                            <div class="item-name">${item.name}</div>
+                            <div class="item-price">$${item.price.toLocaleString()}</div>
+                            <div class="item-desc">
+                                ${item.brand ? '<span class="brand">' + item.brand + '</span>' : ''}
+                            </div>
+                            <button class="buy-btn" onclick="buyItem('${cat}', '${id}')">
+                                <span>Adquirir</span>
+                            </button>
+                        </div>
+                    `;
+                }
+                sectionHtml += '</div>';
+                if (hasItems) html += sectionHtml;
+            }
+        } else {
+            html += '<div class="shop-grid">';
+            for (const id in items) {
+                const item = items[id];
+                if (item.price <= 0) continue;
+                
+                // Hide unique purchases (cellphone & lands)
+                if (cat === 'items' && id === 'cellphone' && lastState.farm.hasCellphone) continue;
+                if (cat === 'lands' && lastState.farm.unlockedLands && lastState.farm.unlockedLands.includes(id)) continue;
+
+                html += `
+                    <div class="shop-card">
+                        <div class="shop-card-badge">${cat.toUpperCase()}</div>
+                        <div class="item-name">${item.name}</div>
+                        <div class="item-price">$${item.price.toLocaleString()}</div>
+                        <div class="item-desc">
+                            ${item.brand ? '<span class="brand">' + item.brand + '</span>' : ''}
+                            ${item.type ? '<span class="type">' + item.type + '</span>' : ''}
+                        </div>
+                        <button class="buy-btn" onclick="buyItem('${cat}', '${id}')">
+                            <span>Adquirir</span>
+                        </button>
+                    </div>
+                `;
+            }
+            html += '</div>';
+        }
+
+    }
+    cont.innerHTML = html;
+}
+
+function renderSellMenuInShop() {
+    const cont = document.getElementById('shop-content');
+    if (!cont || !lastState) return;
+
+    let html = '<div class="sell-info-header">Itens em sua posse (Venda por 80% do valor original)</div><div class="shop-grid">';
+    const inv = lastState.farm.inventory;
+
+    // Veículos
+    inv.vehicles.forEach((v) => {
+        const model = catalog.vehicles[v.modelId];
+        // Bloquear venda de itens de preço 0
+        if (model && model.price > 0) {
+            html += `
+                <div class="shop-card sell-card">
+                    <div class="shop-card-badge sell">VEÍCULO</div>
+                    <div class="item-name">${model.name}</div>
+                    <div class="item-price">Retorno: $${Math.floor(model.price * 0.8).toLocaleString()}</div>
+                    <button class="sell-btn" onclick="sellItem('vehicles', '${v.id}')">Vender Agora</button>
+                </div>
+            `;
+        }
+    });
+
+    // Implementos
+    inv.implements.forEach((imp) => {
+        const model = catalog.implements[imp.modelId];
+        // Bloquear venda de itens de preço 0
+        if (model && model.price > 0) {
+            html += `
+                <div class="shop-card sell-card">
+                    <div class="shop-card-badge sell">IMPL.</div>
+                    <div class="item-name">${model.name}</div>
+                    <div class="item-price">Retorno: $${Math.floor(model.price * 0.8).toLocaleString()}</div>
+                    <button class="sell-btn" onclick="sellItem('implements', '${imp.id}')">Vender Agora</button>
+                </div>
+            `;
+        }
+    });
+    // Terras (Ocultando field_1)
+    if (lastState.farm.unlockedLands) {
+        lastState.farm.unlockedLands.forEach(fid => {
+            if (fid === 'field_1') return; // Não permite vender o campo principal
+            const model = catalog.lands[fid];
+            if (model && model.price > 0) {
+                html += `
+                    <div class="shop-card sell-card">
+                        <div class="shop-card-badge sell">TERRA</div>
+                        <div class="item-name">${model.name}</div>
+                        <div class="item-price">Retorno: $${Math.floor(model.price * 0.8).toLocaleString()}</div>
+                        <button class="sell-btn" onclick="sellItem('lands', '${fid}')">Vender Agora</button>
+                    </div>
+                `;
+            }
+        });
+    }
+
+    html += '</div>';
+    if (html.includes('shop-card')) {
+        cont.innerHTML = html;
+    } else {
+        cont.innerHTML = '<div class="no-items-msg">Você não possui itens valiosos para vender no momento.</div>';
+    }
+}
+
+async function buyItem(cat, id) {
+    if (!catalog || !catalog[cat] || !catalog[cat][id]) return;
+    const item = catalog[cat][id];
+
+    // Bloqueio de segurança para itens de preço 0
+    if (item.price <= 0) {
+        showToast('Este item não está disponível para venda.', 'warning');
+        return;
+    }
+
+    if (multiplayerMode) {
+        socket.emit('shopBuy', { category: cat, itemId: id }, async (res) => {
+            if (res && res.success) {
+                const item = catalog[cat][id];
+                showBigAlert(`${item.name} comprado com sucesso!`);
+                await fetchState();
+                const elMoney = document.getElementById('shop-money');
+                if (elMoney) elMoney.innerText = lastState.farm.money;
+                ensureVehicles();
+                ensureImplements();
+                switchTab(cat);
+            } else {
+                showToast(res ? res.error : 'Erro na compra', 'error');
+            }
+        });
+        return;
+    }
+    try {
+        const d = await apiJson('/shop/buy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: cat, itemId: id })
+        });
+        if (d.success) {
+            showBigAlert(`${item.name} comprado com sucesso!`);
+            await fetchState();
+            const elMoney = document.getElementById('shop-money');
+            if (elMoney) elMoney.innerText = lastState.farm.money;
+            ensureVehicles();
+            ensureImplements();
+            // Refresh shop UI to remove unique items
+            switchTab(cat); 
+        } else {
+            showToast(d.error || 'Saldo insuficiente', 'error');
+        }
+    } catch (e) { }
+}
+
+function closeSellMenu() {
+    const sellModal = document.getElementById('sell-modal');
+    if (sellModal) sellModal.style.display = 'none';
+}
+
+async function sellItem(cat, idx) {
+    // Busca o modelo para verificar o preço
+    let itemPrice = 0;
+    if (lastState && catalog) {
+        const inv = lastState.farm.inventory[cat];
+        const item = inv.find(i => i.id === idx);
+        if (item) {
+            const model = catalog[cat][item.modelId];
+            if (model) itemPrice = model.price;
+        }
+    }
+
+    // Bloqueio de segurança para itens de preço 0
+    if (itemPrice <= 0) {
+        showToast('Itens iniciais não podem ser vendidos.', 'warning');
+        return;
+    }
+
+    if (multiplayerMode) {
+        socket.emit('shopSell', { category: cat, itemId: idx }, async (res) => {
+            if (res && res.success) {
+                let itemName = "Item";
+                if (cat === 'lands' && catalog.lands[idx]) itemName = catalog.lands[idx].name;
+                else if (catalog[cat]) {
+                    const invItem = lastState.farm.inventory[cat].find(i => i.id === idx);
+                    if (invItem && catalog[cat][invItem.modelId]) itemName = catalog[cat][invItem.modelId].name;
+                }
+                showBigAlert(`${itemName} vendido com sucesso!`);
+                await fetchState();
+                const elMoney = document.getElementById('shop-money');
+                if (elMoney) elMoney.innerText = lastState.farm.money;
+                ensureVehicles();
+                ensureImplements();
+                switchTab('sell');
+            } else {
+                showToast(res ? res.error : 'Erro na venda', 'error');
+            }
+        });
+        return;
+    }
+    try {
+        const d = await apiJson('/shop/sell', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: cat, index: idx })
+        });
+        if (d.success) {
+            let itemName = "Item";
+            if (cat === 'lands' && catalog.lands[idx]) itemName = catalog.lands[idx].name;
+            else if (catalog[cat]) {
+                const invItem = lastState.farm.inventory[cat].find(i => i.id === idx);
+                if (invItem && catalog[cat][invItem.modelId]) itemName = catalog[cat][invItem.modelId].name;
+            }
+            showBigAlert(`${itemName} vendido com sucesso!`);
+            await fetchState();
+            switchTab('sell'); // Recarrega a aba de venda
+            ensureVehicles();
+            ensureImplements();
+        }
+    } catch (e) { }
+}
+
+function renderSellMenu(cat) {
+    if (!catalog || !lastState) return;
+    const cont = document.getElementById('sell-items');
+    const tabs = document.querySelectorAll('.sell-tab');
+    if (!cont || !tabs.length) return;
+
+    tabs.forEach(t => t.classList.remove('active'));
+    if (cat === 'vehicles') tabs[0].classList.add('active');
+    else if (cat === 'implements') tabs[1].classList.add('active');
+
+    let html = '';
+    const inv = lastState.farm.inventory;
+    const items = inv[cat];
+
+    if (items.length === 0) {
+        html = '<div style="color:#666; padding:20px;">Você não possui itens nesta categoria.</div>';
+    } else {
+        items.forEach((item, idx) => {
+            const model = catalog[cat][item.modelId];
+            const price = model ? Math.floor(model.price * 0.7) : 0;
+            html += `
+                <div class="shop-item">
+                    <div class="item-name">${model ? model.name : item.modelId}</div>
+                    <div class="item-price">Venda: $${price}</div>
+                    <button onclick="sellItem('${cat}', ${idx})">Vender</button>
+                </div>
+            `;
+        });
+    }
+    cont.innerHTML = html;
+}
+
 // Expose to HTML
 window.buyItem = buyItem;
+window.sellItem = sellItem;
+window.openShop = openShop;
 window.switchTab = switchTab;
 window.closeShop = closeShop;
 window.closeSellMenu = closeSellMenu;
 window.renderSellMenu = renderSellMenu;
 window.toggleFullMap = toggleFullMap;
+window.advanceHour = advanceHour;
 
 // UI Modals
 function openTutorialModal() {
@@ -3838,8 +4166,33 @@ function quitToMainMenu() {
         socket.disconnect();
         socket = null;
     }
+    // Limpar estado visual e posições (Evita fantasmas entre salas/Solo)
+    vehicleSprites.forEach(v => v.sprite.destroy());
+    vehicleSprites = [];
+    spawnedVehicleIds.clear();
+    implementSprites.forEach(i => i.sprite.destroy());
+    implementSprites = [];
+    spawnedImplementIds.clear();
+    
+    vehiclePositions = {};
+    implementPositions = {};
+    activeVehIdx = -1;
+    
+    if (cropsGroup) cropsGroup.clear(true, true);
+    if (decoGroup) decoGroup.clear(true, true);
+
+    Object.values(otherPlayers).forEach(op => {
+        if (op.sprite) op.sprite.destroy();
+        if (op.text) op.text.destroy();
+    });
+    otherPlayers = {};
+
+    const chatMsgs = document.getElementById('chat-messages');
+    if (chatMsgs) chatMsgs.innerHTML = '';
 
     multiplayerMode = false;
+    lastState = null;
+    localState = null; // Força re-carregamento limpo do sessionStorage ao entrar no Solo
 
     // Esconder HUDs
     document.getElementById('hud').style.display = 'none';
@@ -3889,6 +4242,31 @@ function backToMainMenu() {
         socket.disconnect();
         socket = null;
     }
+    // Limpar estado do jogo
+    vehicleSprites.forEach(v => v.sprite.destroy());
+    vehicleSprites = [];
+    spawnedVehicleIds.clear();
+    implementSprites.forEach(i => i.sprite.destroy());
+    implementSprites = [];
+    spawnedImplementIds.clear();
+
+    vehiclePositions = {};
+    implementPositions = {};
+    activeVehIdx = -1;
+    if (cropsGroup) cropsGroup.clear(true, true);
+
+    Object.values(otherPlayers).forEach(op => {
+        if (op.sprite) op.sprite.destroy();
+        if (op.text) op.text.destroy();
+    });
+    otherPlayers = {};
+
+    const chatMsgs = document.getElementById('chat-messages');
+    if (chatMsgs) chatMsgs.innerHTML = '';
+
+    multiplayerMode = false;
+    lastState = null;
+    localState = null;
 }
 
 function initMultiplayer() {
@@ -3913,6 +4291,104 @@ function initMultiplayer() {
     socket.on('disconnect', (reason) => {
         console.log("Socket desconectado. Motivo:", reason);
     });
+
+    socket.on('roomStateSynced', (room) => {
+        multiplayerMode = true;
+        const myInv = room.playerInventories[socket.id] || { vehicles: [], implements: [], hasCellphone: false };
+        lastState = {
+            time: room.time, weather: room.weather, economy: room.economy,
+            farm: {
+                ...room.farm,
+                inventory: myInv,
+                hasCellphone: myInv.hasCellphone
+            },
+            vehicles: room.vehicles,
+            implements: room.implements
+        };
+        isHydrated = true;
+        ensureVehicles();
+        ensureImplements();
+        updateHUD(lastState);
+        updateSoil(room.farm.soil);
+        updateCrops(room.farm.plantedCrops);
+        updateFields();
+        renderLandZones();
+        renderWorldMap();
+
+        // Update local name tag
+        if (playerNameTag) {
+            const nick = document.getElementById('lobby-nickname').value || `Jogador ${socket.id.substring(0, 4)}`;
+            playerNameTag.setText(nick).setVisible(true);
+        }
+    });
+
+    socket.on('tick', (data) => {
+        if (!lastState) return;
+        lastState.time = data.time;
+        lastState.weather = data.weather;
+        lastState.farm.plantedCrops = data.crops;
+        // Atualizar também o estado global se o servidor enviou (ex: novos veículos)
+        if (data.vehicles) lastState.vehicles = data.vehicles;
+        if (data.implements) lastState.implements = data.implements;
+
+        ensureVehicles();
+        ensureImplements();
+        updateHUD(lastState);
+        updateCrops(data.crops);
+    });
+
+    socket.on('soilUpdated', ({ key, state, dir }) => {
+        if (!lastState) return;
+        console.log(`[NET] Soil updated at ${key}: ${state}`);
+        lastState.farm.soil[key] = { state, dir };
+        updateSoil(lastState.farm.soil);
+    });
+
+    socket.on('cropPlanted', ({ x, y, time }) => {
+        if (!lastState) return;
+        lastState.farm.plantedCrops.push({ x, y, plantedTime: time, growthStage: 0, isReady: false, isDead: false });
+        updateCrops(lastState.farm.plantedCrops);
+    });
+
+    socket.on('cropHarvested', ({ x, y }) => {
+        if (!lastState) return;
+        const idx = lastState.farm.plantedCrops.findIndex(c => c.x === x && c.y === y);
+        if (idx !== -1) {
+            lastState.farm.plantedCrops.splice(idx, 1);
+            lastState.farm.soil[`${x},${y}`] = { state: 'normal', dir: null };
+            updateCrops(lastState.farm.plantedCrops);
+            updateSoil(lastState.farm.soil);
+        }
+    });
+
+    socket.on('implementStorageUpdated', ({ id, seedStorage }) => {
+        const imp = implementSprites.find(i => i.id === id);
+        if (imp) {
+            imp.seedStorage = seedStorage;
+        }
+    });
+
+    socket.on('vehicleOccupantsUpdated', (data) => {
+        const veh = vehicleSprites.find(v => v.id === data.vehicleId);
+        if (!veh) return;
+
+        veh.driverId = data.driverId;
+        veh.passengers = data.passengers || [];
+
+        const amIDriver = (veh.driverId === socket.id);
+        const amIPassenger = veh.passengers.includes(socket.id);
+        const iAmInThisVehicle = activeVehIdx === vehicleSprites.indexOf(veh);
+
+        if (iAmInThisVehicle) {
+            // Block or restore input control
+            veh.isMyDriver = amIDriver;
+            // If someone else took over as driver (e.g., we disconnected briefly), keep camera on veh
+        }
+    });
+
+    // implementAttached/implementDetached replaced by 'implementUpdated' — see below
+
+    // implementAttached/implementDetached are now handled by the unified 'implementUpdated' event
 
     socket.on('roomList', (rooms) => {
         const list = document.getElementById('lobby-rooms-list');
@@ -4003,7 +4479,16 @@ function initMultiplayer() {
             const op = otherPlayers[playerInfo.id];
             op.sprite.setPosition(playerInfo.x, playerInfo.y);
             op.sprite.setRotation(playerInfo.angle);
-            op.text.setPosition(playerInfo.x, playerInfo.y - 40);
+            
+            let offsetY = -40;
+            if (playerInfo.vehicleId) {
+                const veh = vehicleSprites.find(v => v.id === playerInfo.vehicleId);
+                if (veh) {
+                    if (veh.driverId === playerInfo.id) offsetY = -60;
+                    else offsetY = -35; // Passenger
+                }
+            }
+            op.text.setPosition(playerInfo.x, playerInfo.y + offsetY);
 
             // Se o jogador estiver em um veículo, esconda o sprite dele
             if (playerInfo.vehicleId) {
@@ -4014,27 +4499,78 @@ function initMultiplayer() {
         }
     });
 
-    socket.on('enterVehicle', (data) => {
+    // Player sprite hiding when entering/exiting vehicles (via dedicated events from server)
+    socket.on('playerEnteredVehicle', (data) => {
         if (otherPlayers[data.playerId]) {
             otherPlayers[data.playerId].sprite.setVisible(false);
+            // Don't hide name tag, let it follow the vehicle in playerMoved
+            otherPlayers[data.playerId].text.setVisible(true);
         }
     });
 
-    socket.on('exitVehicle', (data) => {
+    socket.on('playerExitedVehicle', (data) => {
         if (otherPlayers[data.playerId]) {
+            otherPlayers[data.playerId].sprite.setPosition(data.x, data.y);
             otherPlayers[data.playerId].sprite.setVisible(true);
+            otherPlayers[data.playerId].text.setVisible(true);
         }
     });
 
     socket.on('vehicleUpdated', (vehData) => {
         const veh = vehicleSprites.find(v => v.id === vehData.id);
-        if (veh && activeVehIdx !== vehicleSprites.indexOf(veh)) {
-            // Só atualizar se NÃO formos nós controlando
+        if (!veh) return;
+
+        // Always sync attachment state regardless of who drives
+        veh.attachedImplementId = vehData.attachedImplementId || null;
+
+        // Only update position/rotation/hud-state if we are NOT the driver
+        const iAmDriver = multiplayerMode && socket && veh.driverId === socket.id;
+        if (!iAmDriver) {
             veh.sprite.setPosition(vehData.x, vehData.y);
             veh.sprite.setRotation(vehData.angle);
             veh.engineOn = vehData.isOn;
-            // Atualizar física básica para que outros vejam o movimento fluido se houver interpolação (opcional)
+            veh.velocity = vehData.velocity || 0;
+            veh.gear = vehData.gear || 0;
+            veh.rpm = vehData.rpm || 0;
+            veh.fuel = vehData.fuel || 100;
+            veh.toolOn = vehData.toolOn || false;
+
+            // Update attached implement state for tractors
+            if (veh.attachedImplementId) {
+                const hImpl = implementSprites.find(i => i.id === veh.attachedImplementId);
+                if (hImpl) hImpl.isOn = veh.toolOn;
+            }
+
+            // Reposition attached implement to follow this vehicle
+            if (veh.attachedImplementId) {
+                const TILE = 64;
+                const hImpl = implementSprites.find(i => i.id === veh.attachedImplementId);
+                if (hImpl) {
+                    const dist = TILE * 1.5;
+                    const rot = vehData.angle;
+                    hImpl.sprite.x = vehData.x - Math.cos(rot) * dist;
+                    hImpl.sprite.y = vehData.y - Math.sin(rot) * dist;
+                    hImpl.sprite.rotation = rot;
+                    hImpl.hitchedTo = veh.id;
+                }
+            }
+
+            // Force HUD refresh for passengers
+            if (idx === activeVehIdx) {
+                updateDashboard();
+                refreshStatusHUD();
+                refreshGearHUD();
+            }
         }
+    });
+
+    // Full implement state sync (attach/detach)
+    socket.on('implementUpdated', (impData) => {
+        const imp = implementSprites.find(i => i.id === impData.id);
+        if (!imp) return;
+        console.log('[IMPLEMENT UPDATED]', impData.id, 'attachedTo:', impData.attachedToVehicleId);
+        imp.hitchedTo = impData.attachedToVehicleId || null;
+        if (!imp.hitchedTo) imp.isOn = false;
     });
 
     socket.on('playerLeft', (id) => {

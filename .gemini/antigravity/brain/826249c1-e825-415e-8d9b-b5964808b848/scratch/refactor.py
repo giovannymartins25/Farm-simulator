@@ -1,72 +1,25 @@
-import express from 'express';
-import cors from 'cors';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import Crop from './models/crop.js';
+import re
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  },
-  transports: ["websocket", "polling"]
-});
-app.use(cors());
-app.use(express.json());
-app.use(express.static('game-frontend'));
+with open('c:/Users/Giovanny/Desktop/Jogo-farm/server.js', 'r', encoding='utf-8') as f:
+    content = f.read()
 
-// ============================================================
-//  CATALOG — Veículos com marcas, implementos, sementes, terras
-// ============================================================
-const CATALOG = {
-  vehicles: {
-    // TRATORES
-    tractor_mf275: { name: 'MF 275', brand: 'Massey Ferguson', type: 'tractor', hp: 50, speed: 5, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.12, friction: 0.965, turnSpeedBase: 0.12, fuelCapacity: 50, price: 0 },
-    tractor_valtra: { name: 'A850', brand: 'Valtra', type: 'tractor', hp: 85, speed: 6, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.15, friction: 0.970, turnSpeedBase: 0.11, fuelCapacity: 80, price: 800 },
-    tractor_nh: { name: 'T6.110', brand: 'New Holland', type: 'tractor', hp: 120, speed: 7, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.19, friction: 0.975, turnSpeedBase: 0.09, fuelCapacity: 120, price: 1800 },
-    tractor_jd: { name: 'JD 6130J', brand: 'John Deere', type: 'tractor', hp: 150, speed: 8, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.23, friction: 0.980, turnSpeedBase: 0.08, fuelCapacity: 150, price: 3000 },
-    tractor_case: { name: 'Magnum 310', brand: 'Case IH', type: 'tractor', hp: 220, speed: 9, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.28, friction: 0.985, turnSpeedBase: 0.07, fuelCapacity: 220, price: 5000 },
-    // COLHEITADEIRAS
-    harvester_mf5650: { name: 'MF 5650', brand: 'Massey Ferguson', type: 'harvester', hp: 60, capacity: 50, speed: 4, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.10, friction: 0.960, turnSpeedBase: 0.06, fuelCapacity: 100, price: 0 },
-    harvester_nh: { name: 'TC5090', brand: 'New Holland', type: 'harvester', hp: 100, capacity: 120, speed: 5, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.13, friction: 0.965, turnSpeedBase: 0.05, fuelCapacity: 200, price: 2000 },
-    harvester_jd: { name: 'S680', brand: 'John Deere', type: 'harvester', hp: 120, capacity: 250, speed: 6, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.16, friction: 0.970, turnSpeedBase: 0.04, fuelCapacity: 350, price: 4500 },
-    // CAMINHÕES
-    truck_vw: { name: 'Constellation', brand: 'Volkswagen', type: 'truck', hp: 120, capacity: 30, speed: 7, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.18, friction: 0.975, turnSpeedBase: 0.05, fuelCapacity: 150, price: 0 },
-    truck_mb: { name: 'Atego 2430', brand: 'Mercedes-Benz', type: 'truck', hp: 160, capacity: 80, speed: 8, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.22, friction: 0.980, turnSpeedBase: 0.04, fuelCapacity: 250, price: 1500 },
-    truck_scania: { name: 'R450', brand: 'Scania', type: 'truck', hp: 200, capacity: 150, speed: 9, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.26, friction: 0.985, turnSpeedBase: 0.04, fuelCapacity: 400, price: 3000 },
-  },
-  implements: {
-    plow_small: { name: 'Tombador Pequeno', type: 'plow', requiredHp: 30, width: 1, price: 0 },
-    plow_medium: { name: 'Tombador Médio', type: 'plow', requiredHp: 80, width: 2, price: 300 },
-    plow_large: { name: 'Tombador Grande', type: 'plow', requiredHp: 150, width: 3, price: 700 },
-    harrow_small: { name: 'Gradão 4 Linhas', type: 'harrow', requiredHp: 30, width: 1, lines: 4, price: 0 },
-    harrow_medium: { name: 'Gradão 8 Linhas', type: 'harrow', requiredHp: 80, width: 2, lines: 8, price: 400 },
-    harrow_large: { name: 'Gradão 12 Linhas', type: 'harrow', requiredHp: 150, width: 3, lines: 12, price: 800 },
-    seeder_small: { name: 'Plantadeira Pequena', type: 'seeder', requiredHp: 30, width: 1, capacity: 20, price: 0 },
-    seeder_medium: { name: 'Plantadeira Média', type: 'seeder', requiredHp: 80, width: 2, capacity: 50, price: 450 },
-    seeder_large: { name: 'Plantadeira Grande', type: 'seeder', requiredHp: 150, width: 3, capacity: 100, price: 900 },
-  },
-  seeds: {
-    seed_10: { name: '10 Sementes', amount: 10, price: 30 },
-    seed_25: { name: '25 Sementes', amount: 25, price: 65 },
-    seed_50: { name: '50 Sementes', amount: 50, price: 110 },
-  },
-  lands: {
-    field_1: { name: 'Vale Esmeralda', x: 4992, y: 5952, w: 1024, h: 832, price: 0 },
-    field_2: { name: 'Colinas do Sol', x: 6144, y: 5952, w: 1216, h: 832, price: 15000 },
-    field_3: { name: 'Planície Alta', x: 4992, y: 6976, w: 1024, h: 1024, price: 20000 },
-    field_4: { name: 'Campos do Rio', x: 6144, y: 6976, w: 1536, h: 1024, price: 35000 },
-    field_5: { name: 'Latifúndio', x: 4992, y: 8192, w: 2560, h: 1216, price: 80000 }
-  },
-  items: {
-    cellphone: { name: 'Celular Smartphone', type: 'item', price: 500 }
-  }
-};
+# Remove REST endpoints related to gameplay
+# They start at app.get('/state', ...) and end before const rooms = {};
+start_idx = content.find("app.get('/state'")
+end_idx = content.find("// ============================================================\n//  MULTIPLAYER (SOCKET.IO)")
 
-// Helpers
+if start_idx != -1 and end_idx != -1:
+    content = content[:start_idx] + content[end_idx:]
+
+# Remove globalState and runTick imports
+content = content.replace("import { globalState } from './core/state.js';\n", "")
+content = content.replace("import { runTick } from './core/gameLoop.js';\n", "")
+
+# Replace helpers that use globalState
+helpers_start = content.find("// Helpers")
+helpers_end = content.find("app.get('/shop/catalog'")
+if helpers_start != -1 and helpers_end != -1:
+    new_helpers = """// Helpers
 function getHarvesterCapacity(room) {
   const h = Object.values(room.vehicles).filter(v => CATALOG.vehicles[v.modelId]?.type === 'harvester');
   if (!h.length) return 50;
@@ -95,8 +48,7 @@ function getSoilDir(room, key) {
 function isInAnyField(room, x, y) {
   for (const fid of room.farm.unlockedLands) {
     const f = CATALOG.lands[fid];
-    // Verifica se a tile está TOTALMENTE dentro do campo (Alinhamento 64px)
-    if (f && x >= f.x && (x + 64) <= (f.x + f.w) && y >= f.y && (y + 64) <= (f.y + f.h)) return true;
+    if (f && x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h) return true;
   }
   return false;
 }
@@ -104,12 +56,13 @@ function isInAnyField(room, x, y) {
 // ============================================================
 //  ENDPOINTS
 // ============================================================
-app.get('/shop/catalog', (req, res) => res.json(CATALOG));
+"""
+    content = content[:helpers_start] + new_helpers + content[helpers_end:]
 
-// ============================================================
-//  MULTIPLAYER (SOCKET.IO)
-// ============================================================
 
+# Add Room logic
+socket_start = content.find("const rooms = {};")
+socket_logic = """
 const rooms = {}; // roomId -> RoomState
 const players = {}; // socketId -> { id, roomId, x, y, angle, vehicleId, nickname }
 
@@ -140,16 +93,8 @@ function createRoomState(roomId, isPrivate, code) {
       unlockedLands: ['field_1']
     },
     playerInventories: {}, // playerId -> { vehicles: [], implements: [], hasCellphone: false }
-    vehicles: {
-      'veh_1': { id: 'veh_1', modelId: 'tractor_mf275', ownerId: 'server', driverId: null, passengers: [], fuel: 50, attachedImplementId: null, x: 1050, y: 1050, rotation: 0, velocity: 0, engineOn: false },
-      'veh_2': { id: 'veh_2', modelId: 'harvester_mf5650', ownerId: 'server', driverId: null, passengers: [], fuel: 100, attachedImplementId: null, x: 1100, y: 1050, rotation: 0, velocity: 0, engineOn: false },
-      'veh_3': { id: 'veh_3', modelId: 'truck_vw', ownerId: 'server', driverId: null, passengers: [], fuel: 150, attachedImplementId: null, x: 1150, y: 1050, rotation: 0, velocity: 0, engineOn: false }
-    },
-    implements: {
-      'imp_1': { id: 'imp_1', modelId: 'plow_small', ownerId: 'server', seedStorage: 0, attachedToVehicleId: null },
-      'imp_2': { id: 'imp_2', modelId: 'harrow_small', ownerId: 'server', seedStorage: 0, attachedToVehicleId: null },
-      'imp_3': { id: 'imp_3', modelId: 'seeder_small', ownerId: 'server', seedStorage: 0, attachedToVehicleId: null }
-    },
+    vehicles: {}, // vehId -> { id, modelId, ownerId, driverId, passengers: [], fuel, attachedImplementId, x, y, rotation, velocity, engineOn }
+    implements: {}, // impId -> { id, modelId, ownerId, seedStorage, attachedToVehicleId }
     counters: { vehicle: 10, implement: 10 }
   };
 }
@@ -287,12 +232,11 @@ io.on('connection', (socket) => {
     if (!veh) return;
 
     // Remover de outro veiculo antes
-    if (player.vehicleId && player.vehicleId !== data.vehicleId) {
+    if (player.vehicleId) {
        const oldVeh = room.vehicles[player.vehicleId];
        if (oldVeh) {
           if (oldVeh.driverId === socket.id) oldVeh.driverId = oldVeh.passengers.length ? oldVeh.passengers.shift() : null;
           else oldVeh.passengers = oldVeh.passengers.filter(p => p !== socket.id);
-          io.to(player.roomId).emit('vehicleOccupantsUpdated', { vehicleId: oldVeh.id, driverId: oldVeh.driverId, passengers: oldVeh.passengers });
        }
     }
 
@@ -303,12 +247,7 @@ io.on('connection', (socket) => {
     }
     
     player.vehicleId = data.vehicleId;
-    console.log('[ENTER VEHICLE]', socket.id, '->', data.vehicleId, 'as', veh.driverId === socket.id ? 'DRIVER' : 'PASSENGER');
-    // Broadcast occupants + notify others to hide player sprite
-    io.to(player.roomId).emit('vehicleOccupantsUpdated', { 
-      vehicleId: veh.id, driverId: veh.driverId, passengers: veh.passengers 
-    });
-    socket.to(player.roomId).emit('playerEnteredVehicle', { playerId: socket.id, vehicleId: veh.id });
+    io.to(player.roomId).emit('vehicleOccupantsUpdated', { vehicleId: veh.id, driverId: veh.driverId, passengers: veh.passengers });
   });
 
   socket.on('exitVehicle', () => {
@@ -316,7 +255,7 @@ io.on('connection', (socket) => {
     if (!player || !player.roomId || !player.vehicleId) return;
     const room = rooms[player.roomId];
     const veh = room.vehicles[player.vehicleId];
-    if (!veh) { player.vehicleId = null; return; }
+    if (!veh) return;
 
     if (veh.driverId === socket.id) {
       veh.driverId = veh.passengers.length ? veh.passengers.shift() : null;
@@ -325,12 +264,7 @@ io.on('connection', (socket) => {
     }
     
     player.vehicleId = null;
-    console.log('[EXIT VEHICLE]', socket.id, 'from', veh.id, 'newDriver:', veh.driverId);
-    // Notify all to show the player sprite again
     io.to(player.roomId).emit('vehicleOccupantsUpdated', { vehicleId: veh.id, driverId: veh.driverId, passengers: veh.passengers });
-    socket.to(player.roomId).emit('playerExitedVehicle', { 
-      playerId: socket.id, x: player.x, y: player.y 
-    });
   });
 
   socket.on('vehicleUpdate', (vehData) => {
@@ -339,32 +273,14 @@ io.on('connection', (socket) => {
     const room = rooms[player.roomId];
     const veh = room.vehicles[vehData.id];
     
-    // Only the driver can push vehicle state
+    // Somente o driver pode atualizar o estado do veículo
     if (veh && veh.driverId === socket.id) {
       veh.x = vehData.x;
       veh.y = vehData.y;
       veh.rotation = vehData.angle;
       veh.velocity = vehData.velocity;
       veh.engineOn = vehData.isOn;
-      veh.gear = vehData.gear;
-      veh.rpm = vehData.rpm;
-      veh.fuel = vehData.fuel;
-      veh.toolOn = vehData.toolOn; // For harvesters
-
-      // Broadcast to ALL others (includes implement position via client reconstruct)
-      socket.to(player.roomId).emit('vehicleUpdated', {
-        id: veh.id,
-        x: veh.x,
-        y: veh.y,
-        angle: veh.rotation,
-        velocity: veh.velocity,
-        isOn: veh.engineOn,
-        gear: veh.gear,
-        rpm: veh.rpm,
-        fuel: veh.fuel,
-        toolOn: veh.toolOn,
-        attachedImplementId: veh.attachedImplementId
-      });
+      socket.to(player.roomId).emit('vehicleUpdated', vehData);
     }
   });
 
@@ -376,25 +292,9 @@ io.on('connection', (socket) => {
     const imp = room.implements[data.implementId];
     
     if (veh && imp && veh.driverId === socket.id) {
-      // Clear previous attachment on the implement if any
-      if (imp.attachedToVehicleId && imp.attachedToVehicleId !== veh.id) {
-        const prevVeh = room.vehicles[imp.attachedToVehicleId];
-        if (prevVeh) prevVeh.attachedImplementId = null;
-      }
-      // Clear previous implement on the vehicle if any
-      if (veh.attachedImplementId && veh.attachedImplementId !== imp.id) {
-        const prevImp = room.implements[veh.attachedImplementId];
-        if (prevImp) prevImp.attachedToVehicleId = null;
-      }
       veh.attachedImplementId = imp.id;
       imp.attachedToVehicleId = veh.id;
-      console.log('[ATTACH IMPLEMENT]', socket.id, 'veh:', veh.id, 'imp:', imp.id);
-      // Broadcast full objects so clients can reconstruct render
-      io.to(player.roomId).emit('implementUpdated', { ...imp });
-      io.to(player.roomId).emit('vehicleUpdated', {
-        id: veh.id, x: veh.x, y: veh.y, angle: veh.rotation,
-        velocity: veh.velocity, isOn: veh.engineOn, attachedImplementId: veh.attachedImplementId
-      });
+      io.to(player.roomId).emit('implementAttached', { vehicleId: veh.id, implementId: imp.id });
     }
   });
 
@@ -406,16 +306,10 @@ io.on('connection', (socket) => {
     
     if (veh && veh.driverId === socket.id && veh.attachedImplementId) {
       const imp = room.implements[veh.attachedImplementId];
-      const oldImpId = veh.attachedImplementId;
       if (imp) imp.attachedToVehicleId = null;
+      const oldImpId = veh.attachedImplementId;
       veh.attachedImplementId = null;
-      console.log('[DETACH IMPLEMENT]', socket.id, 'veh:', veh.id, 'imp:', oldImpId);
-      // Broadcast updated state
-      if (imp) io.to(player.roomId).emit('implementUpdated', { ...imp });
-      io.to(player.roomId).emit('vehicleUpdated', {
-        id: veh.id, x: veh.x, y: veh.y, angle: veh.rotation,
-        velocity: veh.velocity, isOn: veh.engineOn, attachedImplementId: null
-      });
+      io.to(player.roomId).emit('implementDetached', { vehicleId: veh.id, implementId: oldImpId });
     }
   });
 
@@ -455,63 +349,58 @@ io.on('connection', (socket) => {
     socket.emit('toast', { msg: `Abastecido por $${cost}`, tone: 'success' });
   });
 
-  socket.on('shopBuy', ({ category, itemId }, ack) => {
+  socket.on('shopBuy', ({ category, itemId }) => {
     const player = players[socket.id];
-    if (!player || !player.roomId) { if(ack) ack({success: false, error: 'Sem sala'}); return; }
+    if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
     const inv = room.playerInventories[socket.id];
     
     if (category === 'vehicles') {
       const it = CATALOG.vehicles[itemId];
-      if (!it || room.farm.money < it.price) { if(ack) ack({success: false, error: 'Saldo insuficiente'}); return; }
+      if (!it || room.farm.money < it.price) return;
       room.farm.money -= it.price;
       const id = `veh_${room.counters.vehicle++}`;
       room.vehicles[id] = { id, modelId: itemId, ownerId: socket.id, driverId: null, passengers: [], fuel: it.fuelCapacity || 100, attachedImplementId: null, x: player.x, y: player.y, rotation: 0, velocity: 0, engineOn: false };
       inv.vehicles.push(id);
     } else if (category === 'implements') {
       const it = CATALOG.implements[itemId];
-      if (!it || room.farm.money < it.price) { if(ack) ack({success: false, error: 'Saldo insuficiente'}); return; }
+      if (!it || room.farm.money < it.price) return;
       room.farm.money -= it.price;
       const id = `imp_${room.counters.implement++}`;
       room.implements[id] = { id, modelId: itemId, ownerId: socket.id, seedStorage: 0, attachedToVehicleId: null };
       inv.implements.push(id);
     } else if (category === 'seeds') {
       const it = CATALOG.seeds[itemId];
-      if (!it || room.farm.money < it.price) { if(ack) ack({success: false, error: 'Saldo insuficiente'}); return; }
+      if (!it || room.farm.money < it.price) return;
       room.farm.money -= it.price;
       room.farm.seedDepot += it.amount;
     } else if (category === 'lands') {
       const it = CATALOG.lands[itemId];
-      if (!it || room.farm.money < it.price || room.farm.unlockedLands.includes(itemId)) { if(ack) ack({success: false, error: 'Saldo insuficiente ou já possui'}); return; }
+      if (!it || room.farm.money < it.price || room.farm.unlockedLands.includes(itemId)) return;
       room.farm.money -= it.price;
       room.farm.unlockedLands.push(itemId);
     } else if (category === 'items') {
       const it = CATALOG.items[itemId];
-      if (!it || room.farm.money < it.price || inv.hasCellphone) { if(ack) ack({success: false, error: 'Saldo insuficiente ou já possui'}); return; }
+      if (!it || room.farm.money < it.price || inv.hasCellphone) return;
       room.farm.money -= it.price;
       if (itemId === 'cellphone') inv.hasCellphone = true;
     }
     broadcastRoomState(player.roomId);
-    if (ack) ack({ success: true });
   });
 
-  socket.on('shopSell', ({ category, itemId }, ack) => {
+  socket.on('shopSell', ({ category, itemId }) => {
     const player = players[socket.id];
-    if (!player || !player.roomId) { if(ack) ack({success: false, error: 'Sem sala'}); return; }
+    if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
     const inv = room.playerInventories[socket.id];
     
     if (category === 'vehicles') {
       const idx = inv.vehicles.indexOf(itemId);
-      if (idx === -1) { if(ack) ack({success: false, error: 'Não possui'}); return; }
+      if (idx === -1) return;
       const veh = room.vehicles[itemId];
-      if (!veh) { if(ack) ack({success: false, error: 'Não existe'}); return; }
+      if (!veh) return;
       
-      if (veh.driverId || veh.passengers.length > 0) {
-        socket.emit('error', 'Veículo em uso');
-        if(ack) ack({success: false, error: 'Veículo em uso'});
-        return;
-      }
+      if (veh.driverId || veh.passengers.length > 0) return socket.emit('error', 'Veículo em uso');
       
       const model = CATALOG.vehicles[veh.modelId];
       inv.vehicles.splice(idx, 1);
@@ -519,53 +408,30 @@ io.on('connection', (socket) => {
       room.farm.money += Math.floor(model.price * 0.8);
     } else if (category === 'implements') {
       const idx = inv.implements.indexOf(itemId);
-      if (idx === -1) { if(ack) ack({success: false, error: 'Não possui'}); return; }
+      if (idx === -1) return;
       const imp = room.implements[itemId];
-      if (!imp) { if(ack) ack({success: false, error: 'Não existe'}); return; }
+      if (!imp) return;
       
-      if (imp.attachedToVehicleId) {
-        socket.emit('error', 'Implemento engatado');
-        if(ack) ack({success: false, error: 'Implemento engatado'});
-        return;
-      }
+      if (imp.attachedToVehicleId) return socket.emit('error', 'Implemento engatado');
       
       const model = CATALOG.implements[imp.modelId];
       inv.implements.splice(idx, 1);
       delete room.implements[itemId];
       room.farm.money += Math.floor(model.price * 0.8);
-    } else if (category === 'lands') {
-      if (itemId === 'field_1') {
-        socket.emit('error', 'Nao e possivel vender o campo principal');
-        if(ack) ack({success: false, error: 'Nao e possivel vender o campo principal'});
-        return;
-      }
-      const idx = room.farm.unlockedLands.indexOf(itemId);
-      if (idx === -1) { if(ack) ack({success: false, error: 'Não possui'}); return; }
-      
-      const model = CATALOG.lands[itemId];
-      if (!model) { if(ack) ack({success: false, error: 'Não existe'}); return; }
-      
-      room.farm.unlockedLands.splice(idx, 1);
-      room.farm.money += Math.floor(model.price * 0.8);
     }
     broadcastRoomState(player.roomId);
-    if (ack) ack({ success: true });
   });
 
   socket.on('actionPlow', ({ x, y }) => {
     const player = players[socket.id];
     if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
-    if (!isInAnyField(room, x, y)) {
-      socket.emit('toast', { msg: 'Fora do campo!', tone: 'warning' });
-      return;
-    }
+    if (!isInAnyField(room, x, y)) return;
     const key = `${x},${y}`;
     const cur = getSoilState(room, key);
     if (cur === 'normal' || cur === 'harrowed') {
       room.farm.soil[key] = { state: 'plowed', dir: null };
       io.to(player.roomId).emit('soilUpdated', { key, state: 'plowed', dir: null });
-      console.log(`[ACTION] ${player.nickname} araou em ${key}`);
     }
   });
 
@@ -784,3 +650,10 @@ setInterval(() => {
 }, 20000); // 20s = 1 in-game hour
 
 httpServer.listen(PORT, () => console.log(`Backend Multiplayer rodando na porta ${PORT}`));
+"""
+# We replace from socket_start to the end of file
+content = content[:socket_start] + socket_logic
+    
+with open('c:/Users/Giovanny/Desktop/Jogo-farm/server.js', 'w', encoding='utf-8') as f:
+    f.write(content)
+

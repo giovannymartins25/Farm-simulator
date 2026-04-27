@@ -210,7 +210,10 @@
         <div id="shop-modal">
             <div id="shop-inner">
                 <div class="shop-header">
-                    <h2>Loja da Fazenda</h2>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <h2>Loja da Fazenda</h2>
+                        <div class="shop-money-display">Saldo: $<span id="shop-money">0</span></div>
+                    </div>
                     <button class="shop-close" onclick="closeShop()">X</button>
                 </div>
                 <div class="shop-tabs">
