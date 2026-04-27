@@ -719,17 +719,25 @@ function create() {
         o: Phaser.Input.Keyboard.KeyCodes.O,
         b: Phaser.Input.Keyboard.KeyCodes.B
     });
-    keys.f.on('down', doToggleVehicle, this);
-    keys.e.on('down', doToggleHitch, this);
-    keys.c.on('down', doToggleEngine, this);
-    keys.l.on('down', doToggleImplementPower, this);
-    keys.q.on('down', doContextAction, this);
+    keys.f.on('down', doToggleVehicle, this); // F para Entrar/Sair
+    keys.e.on('down', doToggleHitch, this);    // E para Engatar/Desengatar
+    keys.c.on('down', doToggleEngine, this);   // C para Motor
+    keys.l.on('down', doToggleImplementPower, this); // L para ligar Implemento
+    keys.q.on('down', doContextAction, this);  // Q para Interagir (Silo, etc)
+    
+    // Marchas em R e V
     keys.r.on('down', doShiftUp, this);
     keys.v.on('down', doShiftDown, this);
-    keys.g.on('down', doToggleTransmission, this);
-    keys.h.on('down', doToggleAutoWork, this);
-    keys.t.on('down', () => advanceHour());
-    keys.esc.on('down', () => { if (shopOpen) closeShop(); });
+
+    keys.g.on('down', doToggleTransmission, this); // G para Marcha Automática
+    keys.h.on('down', doToggleAutoWork, this);     // H para AutoDrive
+    keys.t.on('down', () => advanceHour());   
+    keys.esc.on('down', () => { 
+        if (shopOpen) closeShop(); 
+        else if (document.getElementById('controls-modal').style.display === 'flex') closeControlsModal();
+        else if (document.getElementById('tutorial-modal').style.display === 'flex') closeTutorialModal();
+        else openPauseMenu();
+    });
     keys.left.on('down', () => cycleVehicles(-1, this));
     keys.right.on('down', () => cycleVehicles(1, this));
     keys.m.on('down', toggleFullMap);
@@ -1984,7 +1992,9 @@ function update() {
         // Reposition own name tag above vehicle
         if (playerNameTag) {
             let offsetY = -40;
-            if (activeVeh.driverId === socket.id) offsetY = -60;
+            // Segurança contra socket nulo no modo Solo
+            const myId = (multiplayerMode && socket) ? socket.id : null;
+            if (activeVeh.driverId === myId || !multiplayerMode) offsetY = -60;
             else offsetY = -35; // Passenger offset
             playerNameTag.setPosition(player.x, player.y + offsetY).setVisible(true);
         }
@@ -2712,6 +2722,10 @@ function doToggleVehicle() {
                     activeVehicle.isMyDriver = true;
                 }
                 console.log('[ENTER VEHICLE] sent', activeVehicle.id, 'driverId:', activeVehicle.driverId);
+            } else {
+                // No Solo, somos sempre o motorista
+                activeVehicle.driverId = 'local-player';
+                activeVehicle.isMyDriver = true;
             }
 
             maxGears = (m?.gears || 4);

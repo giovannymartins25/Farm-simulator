@@ -134,24 +134,41 @@
                     <h2>Controles do Jogo</h2>
                     <button class="modal-close" onclick="closeControlsModal()">X</button>
                 </div>
-                <div class="modal-content">
-                    <ul>
-                        <li><b>WASD</b> - Mover jogador / veículo</li>
-                        <li><b>F</b> - Entrar / Sair do veículo</li>
-                        <li><b>E</b> - Acoplar / Desacoplar implemento</li>
-                        <li><b>C</b> - Ligar / Desligar motor</li>
-                        <li><b>O</b> - Abastecer no posto (Segure para encher)</li>
-                        <li><b>L</b> - Ligar / Desligar implemento (Puxar/Plataforma)</li>
-                        <li><b>SHIFT</b> - Segurar embreagem (manual)</li>
-                        <li><b>R / V</b> - Subir / Descer marcha</li>
-                        <li><b>G</b> - Ligar / Desligar câmbio automático</li>
-                        <li><b>H</b> - Ligar / Desligar AUTO DRIVE</li>
-                        <li><b>N</b> - Mostrar/Esconder Monitor de Campo</li>
-                        <li><b>SPACE</b> - Freio</li>
-                        <li><b>Q</b> - Interagir / Transferir Combustível (Caminhão)</li>
-                        <li><b>M</b> - Abrir Mapa Completo</li>
-                        <li><b>Z</b> - Abrir Celular (Compre na loja)</li>
-                    </ul>
+                <div class="modal-content" style="white-space: pre-line; line-height: 1.6;">
+                    🎮 <b>CONTROLES DO JOGO</b>
+
+                    🚶 <b>Personagem:</b>
+                    W / A / S / D → Andar pelo mapa
+                    F → Entrar / sair de veículos
+                    M → Abrir mapa
+
+                    🚜 <b>Veículos:</b>
+                    W → Acelerar
+                    S → Frear / Ré
+                    A / D → Virar
+                    E → Engatar / Desengatar implemento
+                    C → Ligar / desligar motor
+                    G → Ativar / Desativar marcha automática
+                    H → Ativar / desativar AutoDrive
+                    L → Ligar / desligar implemento (Puxar/Plataforma)
+                    O → Abastecer no posto
+
+                    🌾 <b>Trabalho no campo:</b>
+                    Q → Interagir (Silo, encher sementes, etc)
+                    Z → Abrir celular (se tiver comprado)
+                    N → Mostrar / esconder monitor de campo
+
+                    ⛽ <b>Caminhão:</b>
+                    Q → Abastecer outros veículos (Chegue do lado deles e aperte Q)
+
+                    🛒 <b>Loja:</b>
+                    Aproxime-se da loja → Aperte <b>Q</b>
+                    Use o celular <b>Z</b> para acessar de qualquer lugar
+
+                    💬 <b>Multiplayer:</b>
+                    ENTER → Digitar no chat
+                    B → Fechar / abrir Chat na tela
+                    ESC → Fechar menus / Menu de pausa
                 </div>
             </div>
         </div>
@@ -163,24 +180,57 @@
                     <h2>Passo a Passo da Fazenda</h2>
                     <button class="modal-close" onclick="closeTutorialModal()">X</button>
                 </div>
-                <div class="modal-content tutorial-list">
-                    <div class="tut-step"><span>1</span> Compre um trator na loja (vá até o ícone amarelo e aperte Q ou
-                        clique no local).</div>
-                    <div class="tut-step"><span>2</span> Compre um implemento de preparo (ex: Tombador/Arado).</div>
-                    <div class="tut-step"><span>3</span> Aproxime o trator do implemento e aperte <b>E</b> para engatar.
-                    </div>
-                    <div class="tut-step"><span>4</span> Aperte <b>C</b> para ligar o motor do trator.</div>
-                    <div class="tut-step"><span>5</span> Dirija até a área verde (campo desbloqueado).</div>
-                    <div class="tut-step"><span>6</span> Aperte <b>L</b> para ligar o implemento e arar a terra.</div>
-                    <div class="tut-step"><span>7</span> Troque o implemento para um Gradão e grade a terra arada.</div>
-                    <div class="tut-step"><span>8</span> Troque para uma Plantadeira, compre sementes na loja, encha a
-                        plantadeira e plante na terra gradeada.</div>
-                    <div class="tut-step"><span>9</span> Espere a colheita crescer (cor amarela indica que está pronta).
-                    </div>
-                    <div class="tut-step"><span>10</span> Use a Colheitadeira (ligue a plataforma com <b>L</b>) para
-                        colher.</div>
-                    <div class="tut-step"><span>11</span> Descarregue no Silo, e use um caminhão para vender na cidade!
-                    </div>
+                <div class="modal-content tutorial-list"
+                    style="white-space: pre-line; line-height: 1.5; max-height: 400px; overflow-y: auto;">
+                    🌱 <b>COMO JOGAR - PASSO A PASSO</b>
+
+                    1️⃣ <b>Começando</b>
+                    - Aperta a seta para o lado para ir ate o trator
+                    - Entre no TRATOR (Tecla <b>F</b>)
+                    - Aperte a tecla <b>C</b> para ligar o motor
+                    - Dirija ate a cidade com o trator (<b>W,A,S,D</b>)
+
+                    2️⃣ <b>Preparando a terra</b>
+                    Você precisa preparar o solo em 3 etapas:
+
+                    🚜 <b>Arar (Plow)</b>
+                    - Engate um arado (<b>E</b>)
+                    - Ligue o motor (<b>C</b>) e passe na terra para arar
+
+                    🚜 <b>Gradear (Harrow)</b>
+                    - Troque para uma grade
+                    - Passe na terra arada para nivelar
+
+                    🌱 <b>Plantar (Seed)</b>
+                    - Engate a plantadeira
+                    - Encha com sementes na loja ou casa (tecla <b>Q</b>)
+                    - Passe na terra preparada
+
+                    3️⃣ <b>Esperar crescer</b>
+                    - A plantação leva um tempo para crescer
+                    - Espere até a cor mudar para indicar colheita pronta
+
+                    4️⃣ <b>Colher</b>
+                    - Use uma <b>COLHEITADEIRA</b>
+                    - Passe sobre a plantação madura
+
+                    5️⃣ <b>Vender</b>
+                    - Vá até o silo para descarregar
+                    - Use um caminhão para vender sua produção no ícone de venda
+
+                    6️⃣ <b>Melhorando sua fazenda</b>
+                    - Compre mais veículos e novas terras
+                    - Automatize com <b>AutoDrive (G)</b>
+
+                    7️⃣ <b>Combustível</b>
+                    - Abasteça no posto (<b>O</b>) ou com o caminhão (<b>Q</b>)
+
+                    8️⃣ <b>Multiplayer</b>
+                    - Entre em salas com amigos para trabalhar juntos!
+
+                    💡 <b>DICAS IMPORTANTES:</b>
+                    - Use o monitor de campo (<b>N</b>) para ver o progresso
+                    - O celular (<b>Z</b>) permite comprar de qualquer lugar
                 </div>
             </div>
         </div>
