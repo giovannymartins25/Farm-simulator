@@ -11,33 +11,33 @@ const config = {
 };
 const game = new Phaser.Game(config);
 
-const TILE = 32;
+const TILE = 64;
 const IS_LOCALHOST = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168.');
 const API = IS_LOCALHOST ? `http://${window.location.hostname}:3000` : 'https://farm-simulator.onrender.com';
 const LOCAL_CATALOG = {
     vehicles: {
-        tractor_mf275: { name: 'MF 275', brand: 'Massey Ferguson', type: 'tractor', hp: 50, speed: 5, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.12, friction: 0.965, turnSpeedBase: 0.12, fuelCapacity: 50, price: 0 },
-        tractor_valtra: { name: 'A850', brand: 'Valtra', type: 'tractor', hp: 85, speed: 6, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.15, friction: 0.970, turnSpeedBase: 0.11, fuelCapacity: 80, price: 800 },
-        tractor_nh: { name: 'T6.110', brand: 'New Holland', type: 'tractor', hp: 120, speed: 7, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.19, friction: 0.975, turnSpeedBase: 0.09, fuelCapacity: 120, price: 1800 },
-        tractor_jd: { name: 'JD 6130J', brand: 'John Deere', type: 'tractor', hp: 150, speed: 8, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.23, friction: 0.980, turnSpeedBase: 0.08, fuelCapacity: 150, price: 3000 },
-        tractor_case: { name: 'Magnum 310', brand: 'Case IH', type: 'tractor', hp: 220, speed: 9, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.28, friction: 0.985, turnSpeedBase: 0.07, fuelCapacity: 220, price: 5000 },
-        harvester_mf5650: { name: 'MF 5650', brand: 'Massey Ferguson', type: 'harvester', hp: 60, capacity: 50, speed: 4, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.10, friction: 0.960, turnSpeedBase: 0.06, fuelCapacity: 100, price: 0 },
-        harvester_nh: { name: 'TC5090', brand: 'New Holland', type: 'harvester', hp: 100, capacity: 120, speed: 5, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.13, friction: 0.965, turnSpeedBase: 0.05, fuelCapacity: 200, price: 2000 },
-        harvester_jd: { name: 'S680', brand: 'John Deere', type: 'harvester', hp: 120, capacity: 250, speed: 6, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.16, friction: 0.970, turnSpeedBase: 0.04, fuelCapacity: 350, price: 4500 },
-        truck_vw: { name: 'Constellation', brand: 'Volkswagen', type: 'truck', hp: 120, capacity: 30, speed: 7, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.18, friction: 0.975, turnSpeedBase: 0.05, fuelCapacity: 150, price: 0 },
-        truck_mb: { name: 'Atego 2430', brand: 'Mercedes-Benz', type: 'truck', hp: 160, capacity: 80, speed: 8, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.22, friction: 0.980, turnSpeedBase: 0.04, fuelCapacity: 250, price: 1500 },
-        truck_scania: { name: 'R450', brand: 'Scania', type: 'truck', hp: 200, capacity: 150, speed: 9, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.26, friction: 0.985, turnSpeedBase: 0.04, fuelCapacity: 400, price: 3000 }
+        tractor_mf275: { name: 'MF 275', brand: 'Massey Ferguson', type: 'tractor', power: 50, weight: 3500, brakeForce: 0.15, hp: 50, speed: 5, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.12, friction: 0.965, turnSpeedBase: 0.12, fuelCapacity: 50, price: 0 },
+        tractor_valtra: { name: 'A850', brand: 'Valtra', type: 'tractor', power: 85, weight: 4200, brakeForce: 0.15, hp: 85, speed: 6, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.15, friction: 0.970, turnSpeedBase: 0.11, fuelCapacity: 80, price: 800 },
+        tractor_nh: { name: 'T6.110', brand: 'New Holland', type: 'tractor', power: 120, weight: 5500, brakeForce: 0.2, hp: 120, speed: 7, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.19, friction: 0.975, turnSpeedBase: 0.09, fuelCapacity: 120, price: 1800 },
+        tractor_jd: { name: 'JD 6130J', brand: 'John Deere', type: 'tractor', power: 150, weight: 6500, brakeForce: 0.25, hp: 150, speed: 8, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.23, friction: 0.980, turnSpeedBase: 0.08, fuelCapacity: 150, price: 3000 },
+        tractor_case: { name: 'Magnum 310', brand: 'Case IH', type: 'tractor', power: 220, weight: 11000, brakeForce: 0.35, hp: 220, speed: 9, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.28, friction: 0.985, turnSpeedBase: 0.07, fuelCapacity: 220, price: 5000 },
+        harvester_mf5650: { name: 'MF 5650', brand: 'Massey Ferguson', type: 'harvester', power: 60, weight: 8000, brakeForce: 0.15, hp: 60, capacity: 50, speed: 4, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.10, friction: 0.960, turnSpeedBase: 0.06, fuelCapacity: 100, price: 0 },
+        harvester_nh: { name: 'TC5090', brand: 'New Holland', type: 'harvester', power: 100, weight: 11000, brakeForce: 0.2, hp: 100, capacity: 120, speed: 5, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.13, friction: 0.965, turnSpeedBase: 0.05, fuelCapacity: 200, price: 2000 },
+        harvester_jd: { name: 'S680', brand: 'John Deere', type: 'harvester', power: 120, weight: 14000, brakeForce: 0.3, hp: 120, capacity: 250, speed: 6, gears: 6, gearType: 'auto', autoDrive: true, acceleration: 0.16, friction: 0.970, turnSpeedBase: 0.04, fuelCapacity: 350, price: 4500 },
+        truck_vw: { name: 'Constellation', brand: 'Volkswagen', type: 'truck', power: 120, weight: 6000, brakeForce: 0.2, hp: 120, capacity: 30, speed: 7, gears: 4, gearType: 'manual', autoDrive: false, acceleration: 0.18, friction: 0.975, turnSpeedBase: 0.05, fuelCapacity: 150, price: 0 },
+        truck_mb: { name: 'Atego 2430', brand: 'Mercedes-Benz', type: 'truck', power: 160, weight: 8000, brakeForce: 0.25, hp: 160, capacity: 80, speed: 8, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.22, friction: 0.980, turnSpeedBase: 0.04, fuelCapacity: 250, price: 1500 },
+        truck_scania: { name: 'R450', brand: 'Scania', type: 'truck', power: 200, weight: 10000, brakeForce: 0.35, hp: 200, capacity: 150, speed: 9, gears: 6, gearType: 'auto', autoDrive: false, acceleration: 0.26, friction: 0.985, turnSpeedBase: 0.04, fuelCapacity: 400, price: 3000 }
     },
     implements: {
-        plow_small: { name: 'Tombador Pequeno', type: 'plow', requiredHp: 30, width: 1, price: 0 },
-        plow_medium: { name: 'Tombador Medio', type: 'plow', requiredHp: 80, width: 2, price: 300 },
-        plow_large: { name: 'Tombador Grande', type: 'plow', requiredHp: 150, width: 3, price: 700 },
-        harrow_small: { name: 'Gradao 4 Linhas', type: 'harrow', requiredHp: 30, width: 1, lines: 4, price: 0 },
-        harrow_medium: { name: 'Gradao 8 Linhas', type: 'harrow', requiredHp: 80, width: 2, lines: 8, price: 400 },
-        harrow_large: { name: 'Gradao 12 Linhas', type: 'harrow', requiredHp: 150, width: 3, lines: 12, price: 800 },
-        seeder_small: { name: 'Plantadeira Pequena', type: 'seeder', requiredHp: 30, width: 1, capacity: 20, price: 0 },
-        seeder_medium: { name: 'Plantadeira Media', type: 'seeder', requiredHp: 80, width: 2, capacity: 50, price: 450 },
-        seeder_large: { name: 'Plantadeira Grande', type: 'seeder', requiredHp: 150, width: 3, capacity: 100, price: 900 }
+        plow_small: { name: 'Tombador Pequeno', type: 'plow', requiredHp: 30, weight: 800, drag: 0.05, width: 1, price: 0 },
+        plow_medium: { name: 'Tombador Medio', type: 'plow', requiredHp: 80, weight: 1500, drag: 0.08, width: 2, price: 300 },
+        plow_large: { name: 'Tombador Grande', type: 'plow', requiredHp: 150, weight: 3000, drag: 0.15, width: 3, price: 700 },
+        harrow_small: { name: 'Gradao 4 Linhas', type: 'harrow', requiredHp: 30, weight: 600, drag: 0.03, width: 1, lines: 4, price: 0 },
+        harrow_medium: { name: 'Gradao 8 Linhas', type: 'harrow', requiredHp: 80, weight: 1200, drag: 0.06, width: 2, lines: 8, price: 400 },
+        harrow_large: { name: 'Gradao 12 Linhas', type: 'harrow', requiredHp: 150, weight: 2500, drag: 0.10, width: 3, lines: 12, price: 800 },
+        seeder_small: { name: 'Plantadeira Pequena', type: 'seeder', requiredHp: 30, weight: 1000, drag: 0.04, width: 1, capacity: 20, price: 0 },
+        seeder_medium: { name: 'Plantadeira Media', type: 'seeder', requiredHp: 80, weight: 2000, drag: 0.08, width: 2, capacity: 50, price: 450 },
+        seeder_large: { name: 'Plantadeira Grande', type: 'seeder', requiredHp: 150, weight: 4000, drag: 0.14, width: 3, capacity: 100, price: 900 }
     },
     seeds: {
         seed_10: { name: '10 Sementes', amount: 10, price: 30 },
@@ -85,14 +85,14 @@ function createDefaultLocalState() {
             plantedCrops: [],
             inventory: {
                 vehicles: [
-                    { id: 'veh_1', modelId: 'tractor_mf275', isOn: false, fuel: 50 },
-                    { id: 'veh_2', modelId: 'harvester_mf5650', isOn: false, fuel: 100 },
-                    { id: 'veh_3', modelId: 'truck_vw', isOn: false, fuel: 150 }
+                    { id: 'veh_1', modelId: 'tractor_mf275', isOn: false, fuel: 50, x: 4480, y: 5888 },
+                    { id: 'veh_2', modelId: 'harvester_mf5650', isOn: false, fuel: 100, x: 4544, y: 5888 },
+                    { id: 'veh_3', modelId: 'truck_vw', isOn: false, fuel: 150, x: 4608, y: 5888 }
                 ],
                 implements: [
-                    { id: 'imp_1', modelId: 'plow_small', isOn: false },
-                    { id: 'imp_2', modelId: 'harrow_small', isOn: false },
-                    { id: 'imp_3', modelId: 'seeder_small', isOn: false }
+                    { id: 'imp_1', modelId: 'plow_small', isOn: false, x: 3968, y: 5888 },
+                    { id: 'imp_2', modelId: 'harrow_small', isOn: false, x: 4032, y: 5888 },
+                    { id: 'imp_3', modelId: 'seeder_small', isOn: false, x: 4096, y: 5888 }
                 ]
             },
             unlockedLands: ['field_1'],
@@ -481,13 +481,11 @@ function handleLocalApi(path, options = {}) {
         return { success: true, loaded: amount };
     }
 
-    if (path === '/action/truck/sell' && method === 'POST') {
-        if (state.farm.truckCargoType !== 'crops' || state.farm.truckStorage <= 0) return { success: false };
-        const amount = state.farm.truckStorage;
-        const profit = amount * state.economy.pricePerCrop;
+    if (path === '/shop/sell-crops' && method === 'POST') {
+        if (state.farm.harvestedCrops <= 0) return { success: false, error: 'Silo vazio' };
+        const profit = state.farm.harvestedCrops * state.economy.pricePerCrop;
         state.farm.money += profit;
-        state.farm.truckStorage = 0;
-        state.farm.truckCargoType = null;
+        state.farm.harvestedCrops = 0;
         normalizeState(state);
         return { success: true, profit };
     }
@@ -548,7 +546,7 @@ let spawnedImplementIds = new Set();
 let maxGears = 4;
 let transMode = 'manual'; // 'manual' | 'auto'
 const RATIOS_4 = [0, 0.25, 0.50, 0.75, 1.0];
-const RATIOS_6 = [0, 0.18, 0.35, 0.52, 0.70, 0.88, 1.0];
+const RATIOS_6 = [0, 0.15, 0.28, 0.42, 0.58, 0.74, 0.88];
 const CARDINAL_HEADINGS = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
 const AUTO_DRIVE_SPEED_FACTOR = 0.7;
 const AUTO_DRIVE_TURN_SPEED_FACTOR = 0.45;
@@ -565,7 +563,7 @@ let toastTimer = null;
 
 let keys;
 let lastState = null;
-let catalog = { vehicles: {}, implements: {}, seeds: {}, lands: {} }; // Default fallback
+let catalog = LOCAL_CATALOG; // Usar o catálogo local como padrão para evitar terras sumindo
 let isHydrated = false;
 let currentHour = 0;
 let shopOpen = false;
@@ -579,14 +577,16 @@ let socket = null;
 let otherPlayers = {}; // { socketId: { sprite, text } }
 
 // === Zones ===
-const SHOP_POS = { x: 1500, y: 1500 };
-const GAS_STATION_POS = { x: 2000, y: 1500 };
-const SELL_POS = { x: 2500, y: 1500 };
-const SHOP_PARKING_START = { x: 1200, y: 1000 };
-
-const HOUSE_POS = { x: 4500, y: 5500 };
-const SILO_POS = { x: 5000, y: 5500 };
-const IMPL_BARN_START = { x: 4000, y: 5800 };
+const HOUSE_POS = { x: 4480, y: 5760 };
+const SILO_POS = { x: 4992, y: 5760 };
+const SHOP_POS = { x: 5504, y: 5760 };
+const SELL_POS = { x: 6016, y: 5760 };
+const GAS_STATION_POS = { x: 6528, y: 5760 };
+const IMPL_BARN_START = { x: 3968, y: 5824 };
+const SHOP_PARKING_START = { x: 5504, y: 5824 };
+let sfx = {}; // Sound effects registry
+let masterVolume = 0.5;
+let engineSound = null;
 const STATIC_COLLIDERS = [
     { x: HOUSE_POS.x, y: HOUSE_POS.y, halfW: 58, halfH: 58 },
     { x: SILO_POS.x, y: SILO_POS.y, halfW: 54, halfH: 54 },
@@ -642,6 +642,16 @@ function preload() {
     implIds.forEach(id => {
         this.load.image('impl_' + id, 'assets/implements/' + id + '.png');
     });
+
+    // --- Sounds ---
+    const soundIds = [
+        'engine_loop', 'engine_start', 'engine_stop',
+        'plow', 'harrow', 'seed', 'harvest', 'fuel',
+        'click', 'menu', 'buy'
+    ];
+    soundIds.forEach(id => {
+        this.load.audio('sfx_' + id, 'assets/sounds/' + id + '.wav');
+    });
 }
 
 function create() {
@@ -693,8 +703,8 @@ function create() {
 
     // Player spawns around Farm House
     player = this.add.sprite(HOUSE_POS.x + 50, HOUSE_POS.y + 50, 'p_down').setDepth(4);
-    playerNameTag = this.add.text(player.x, player.y - 40, '', { 
-        fontSize: '14px', fill: '#ffffff', stroke: '#000000', strokeThickness: 3, padding: {x:4, y:2} 
+    playerNameTag = this.add.text(player.x, player.y - 40, '', {
+        fontSize: '14px', fill: '#ffffff', stroke: '#000000', strokeThickness: 3, padding: { x: 4, y: 2 }
     }).setOrigin(0.5).setDepth(5).setVisible(false);
     this.cameras.main.startFollow(player);
 
@@ -724,16 +734,16 @@ function create() {
     keys.c.on('down', doToggleEngine, this);   // C para Motor
     keys.l.on('down', doToggleImplementPower, this); // L para ligar Implemento
     keys.q.on('down', doContextAction, this);  // Q para Interagir (Silo, etc)
-    
+
     // Marchas em R e V
     keys.r.on('down', doShiftUp, this);
     keys.v.on('down', doShiftDown, this);
 
     keys.g.on('down', doToggleTransmission, this); // G para Marcha Automática
     keys.h.on('down', doToggleAutoWork, this);     // H para AutoDrive
-    keys.t.on('down', () => advanceHour());   
-    keys.esc.on('down', () => { 
-        if (shopOpen) closeShop(); 
+    keys.t.on('down', () => advanceHour());
+    keys.esc.on('down', () => {
+        if (shopOpen) closeShop();
         else if (document.getElementById('controls-modal').style.display === 'flex') closeControlsModal();
         else if (document.getElementById('tutorial-modal').style.display === 'flex') closeTutorialModal();
         else openPauseMenu();
@@ -770,6 +780,18 @@ function create() {
 
         setTimeout(hideLoading, 1000);
     })();
+
+    // Initialize Audio registry synchronously
+    const soundKeys = ['engine_loop', 'engine_start', 'engine_stop', 'plow', 'harrow', 'seed', 'harvest', 'fuel', 'click', 'menu', 'buy'];
+    soundKeys.forEach(k => {
+        try {
+            sfx[k] = this.sound.add('sfx_' + k);
+        } catch (e) { console.warn("Erro ao criar som:", k); }
+    });
+    if (sfx['engine_loop']) {
+        sfx['engine_loop'].setLoop(true);
+        sfx['engine_loop'].setVolume(0);
+    }
 
     // Safety timeout: 10 seconds is too long, world should show anyway
     setTimeout(hideLoading, 5000);
@@ -1649,9 +1671,29 @@ function runRecoveryLogic(veh) {
     const maxSpeed = m.speed;
     const ratios = m.gears === 6 ? RATIOS_6 : RATIOS_4;
     const gearMaxSpeed = maxSpeed * (ratios[veh.gear] || 0.25) * 0.8;
-    const accel = (m.acceleration || 0.08) * 0.45;
 
-    veh.velocity = Math.min(veh.velocity + accel, gearMaxSpeed);
+    // 🎯 SISTEMA REALISTA NO AUTODRIVE — Busca implemento via sprite (modelId correto)
+    let totalLoadRecovery = (m.weight || 3000);
+    const hImplRecovery = implementSprites.find(i => i.hitchedTo === veh.id);
+    let implModelRecovery = null;
+    if (hImplRecovery) {
+        implModelRecovery = catalog.implements[hImplRecovery.modelId];
+        if (implModelRecovery) {
+            totalLoadRecovery += (implModelRecovery.weight || 1000);
+        }
+    }
+    // Performance relativa ao peso base do veículo (1.0 sem implemento, < 1.0 com implemento)
+    const baseWeight = (m.weight || 3000);
+    let powerFactorRecovery = Phaser.Math.Clamp(baseWeight / totalLoadRecovery, 0.15, 1.0);
+    // Penalidade por HP insuficiente
+    if (implModelRecovery && implModelRecovery.requiredHp) {
+        const hpRatio = (m.power || 50) / implModelRecovery.requiredHp;
+        if (hpRatio < 1) powerFactorRecovery *= Math.pow(hpRatio, 2);
+    }
+    powerFactorRecovery = Math.max(0.05, powerFactorRecovery);
+    const accelRecovery = (m.acceleration || 0.08) * 0.3 * 0.45 * powerFactorRecovery;
+
+    veh.velocity = Math.min(veh.velocity + accelRecovery, gearMaxSpeed);
     if (veh.velocity < AUTO_DRIVE_MIN_SPEED) veh.velocity = AUTO_DRIVE_MIN_SPEED;
 
     const vx = Math.cos(veh.angle) * veh.velocity;
@@ -1684,7 +1726,7 @@ function runRecoveryLogic(veh) {
     console.log(`[RECOVERY] dist=${dist.toFixed(1)} vel=${veh.velocity.toFixed(2)} attempts=${state.recoveryAttempts}`);
 }
 
-function runVehicleLogic(veh, isControlled) {
+function runVehicleLogic(veh, isControlled, delta = 16.66) {
     const m = getVehicleModel(veh);
     if (!m) return;
 
@@ -1724,7 +1766,7 @@ function runVehicleLogic(veh, isControlled) {
 
     // In multiplayer, passengers should NOT run any physics/logic
     // They just follow the updates from vehicleUpdated event
-    const isMPPassenger = multiplayerMode && socket && veh.driverId && veh.driverId !== socket.id;
+    const isMPPassenger = multiplayerMode && socket && socket.id && veh.driverId && veh.driverId !== socket.id;
     if (isMPPassenger && isControlled) {
         return;
     }
@@ -1745,8 +1787,8 @@ function runVehicleLogic(veh, isControlled) {
 
     if (isVehActive && !veh.autoDriveEnabled) {
         // In multiplayer, only process inputs if WE are the driver
-        const isMPPassenger = multiplayerMode && socket && veh.driverId && veh.driverId !== socket.id;
-        if (isMPPassenger) {
+        const isActuallyPassenger = multiplayerMode && socket && socket.id && veh.driverId && veh.driverId !== socket.id;
+        if (isActuallyPassenger) {
             // Passenger: no controls, just follow
         } else {
             veh.clutchPressed = !!(keys.shift && keys.shift.isDown);
@@ -1828,33 +1870,130 @@ function runVehicleLogic(veh, isControlled) {
     }
     veh.angle = normalizeAngle(veh.angle);
 
-    // 2. Throttle / inertia / clutch
+    // ============================================================================
+    // 🎯 SISTEMA FÍSICO REALISTA V2 — Corrigido e Recalibrado
+    // ============================================================================
+
+    // 1️⃣ CALCULAR CARGA TOTAL E RESISTÊNCIA — Busca implemento via sprite (modelId correto)
+    let totalLoad = (m.weight || 3000);
+    let resistance = 0;
+    const hImplPhysics = implementSprites.find(i => i.hitchedTo === veh.id);
+    let implModelPhysics = null;
+
+    if (hImplPhysics) {
+        implModelPhysics = catalog.implements[hImplPhysics.modelId];
+        if (implModelPhysics) {
+            totalLoad += (implModelPhysics.weight || 1000);
+            if (isToolOn(veh)) {
+                resistance = (implModelPhysics.drag || 0.05);
+            }
+        }
+    }
+
+    // 2️⃣ PERFORMANCE RELATIVA AO PESO BASE
+    // Veículo sozinho = 1.0, com implemento = proporcionalmente menor
+    const baseWeight = (m.weight || 3000);
+    let finalPower = Phaser.Math.Clamp(baseWeight / totalLoad, 0.15, 1.0);
+
+    // 2.5️⃣ PENALIDADE POR HP INSUFICIENTE (não bloqueia, mas pune severamente)
+    if (implModelPhysics && implModelPhysics.requiredHp) {
+        const hpRatio = (m.power || 50) / implModelPhysics.requiredHp;
+        if (hpRatio < 1) {
+            // Penalidade quadrática: 50% HP → 25% performance, 33% HP → 11% performance
+            finalPower *= Math.pow(hpRatio, 2);
+        }
+    }
+    finalPower = Math.max(0.05, finalPower); // Mínimo absoluto para não travar
+
+    // 3️⃣ PESO REDUZ VELOCIDADE MÁXIMA (mesma lógica: peso base / peso total)
+    const loadPenalty = Phaser.Math.Clamp(baseWeight / totalLoad, 0.25, 1.0);
+    const finalMaxSpeed = gearMaxSpeed * loadPenalty;
+
+    // 4️⃣ RESISTÊNCIA CONTÍNUA do peso (proporcional)
+    const weightDrag = totalLoad * 0.000002;
+
+    // Throttle / inertia / clutch
+    const dtSec = delta / 1000;
+    const frameMult = dtSec * 60; // 1 at 60fps
+
+    // 5️⃣ ACELERAÇÃO COM SISTEMA REALISTA
     if (engineOn && veh.rpm > 500 && !clutchPressed) {
-        let accel = (m.acceleration || 0.08) * 0.45;
-        const torqueMultipliers = [1.8, 1.4, 1.1, 0.85, 0.65, 0.45];
-        const gearIdx = Math.min(veh.gear - 1, torqueMultipliers.length - 1);
-        accel *= torqueMultipliers[gearIdx];
+        // Aceleração base
+        let baseAccel = (m.acceleration || 0.08) * 0.35;
+        // Ratios recalibrados para ter mais "força" nas marchas altas e evitar oscilação
+        const accelRatios = m.gears === 6 ? [1.8, 1.4, 1.1, 0.9, 0.75, 0.6] : [1.6, 1.2, 0.9, 0.7];
+        let gearMult = accelRatios[veh.gear - 1] || 1.0;
+
+        // Aceleração depende da carga através de finalPower
+        let accel = baseAccel * gearMult * finalPower;
 
         if (!isOnRoad(veh.sprite.x, veh.sprite.y)) accel *= 0.65;
-        if (isToolOn(veh)) accel *= 0.55;
+        // Resistência do implemento ligado (multiplicador, não subtração)
+        if (resistance > 0) accel *= (1 - resistance);
+        accel = Math.max(0.005, accel); // Garante um mínimo de força
 
-        if (throttleForward) veh.velocity = Math.min(veh.velocity + accel, speedLimit);
-        if (throttleReverse) veh.velocity = Math.max(veh.velocity - accel * 0.6, -gearMaxSpeed * 0.5);
+        if (throttleForward) {
+            veh.velocity += accel * frameMult;
+        }
+        if (throttleReverse) {
+            veh.velocity -= (accel * 0.6) * frameMult;
+        }
 
+        // 6️⃣ DESACELERAÇÃO SUAVE quando sem throttle
         if (!throttleForward && !throttleReverse) {
-            veh.velocity *= (m.friction || 0.985);
+            const drag = 0.992;
+            veh.velocity *= Math.pow(drag, frameMult);
         }
     } else {
-        veh.velocity *= (m.friction || 0.985);
+        // 6️⃣ DESACELERAÇÃO SUAVE quando motor está desligado
+        const drag = 0.992;
+        veh.velocity *= Math.pow(drag, frameMult);
     }
 
-    // 3. Brake
+    // 5️⃣ APLICAR RESISTÊNCIA CONTÍNUA do peso (SEM causar drift reverso)
+    if (veh.velocity > 0) {
+        veh.velocity = Math.max(0, veh.velocity - weightDrag * frameMult);
+    } else if (veh.velocity < 0) {
+        veh.velocity = Math.min(0, veh.velocity + weightDrag * frameMult);
+    }
+
+    // Só zerar velocity quando NÃO está acelerando (evita matar aceleração em construção)
+    if (!throttleForward && !throttleReverse && Math.abs(veh.velocity) < 0.05) veh.velocity = 0;
+
+    let brakeF = m.brakeForce || 0.2;
     if (braking && !autoDriveActive) {
-        veh.velocity *= 0.92;
+        if (veh.velocity > 0) veh.velocity = Math.max(0, veh.velocity - (brakeF * frameMult));
+        else if (veh.velocity < 0) veh.velocity = Math.min(0, veh.velocity + (brakeF * frameMult));
     }
 
-    veh.velocity = Math.max(-gearMaxSpeed * 0.5, Math.min(veh.velocity, speedLimit));
-    if (Math.abs(veh.velocity) < 0.005) veh.velocity = 0;
+    // 7️⃣ CRAWL REAL - Movimento lento quando muito pesado
+    if (finalPower <= 0.2 && throttleForward) {
+        veh.velocity = Math.max(veh.velocity, 0.15);
+    }
+
+    // 8️⃣ LIMITAR VELOCIDADE FINAL
+    veh.velocity = Phaser.Math.Clamp(veh.velocity, -finalMaxSpeed, finalMaxSpeed);
+
+    // 9️⃣ DEBUG COMPLETO (OBRIGATÓRIO)
+    if ((veh.driverId === socket?.id || veh.isMyDriver || !multiplayerMode) && (isControlled || veh.autoDriveEnabled)) {
+        if (!window.lastDebugPrint || Date.now() - window.lastDebugPrint > 1000) {
+            console.log({
+                power: m.power,
+                baseWeight: baseWeight,
+                totalWeight: totalLoad,
+                finalPower: finalPower.toFixed(3),
+                loadPenalty: loadPenalty.toFixed(3),
+                velocity: veh.velocity.toFixed(3),
+                finalMaxSpeed: finalMaxSpeed.toFixed(3),
+                resistance: resistance.toFixed(3),
+                implement: implModelPhysics ? implModelPhysics.name : 'nenhum',
+                requiredHp: implModelPhysics?.requiredHp || 0,
+                engineOn: engineOn,
+                toolOn: isToolOn(veh)
+            });
+            window.lastDebugPrint = Date.now();
+        }
+    }
 
     // 4. Movement update
     if (Math.abs(veh.velocity) > 0.01) {
@@ -1883,7 +2022,7 @@ function runVehicleLogic(veh, isControlled) {
         veh.sprite.rotation = veh.angle;
     }
 
-    // 5. Fuel & RPM
+    // 5. Fuel & RPM (SISTEMA REALISTA V3)
     if (engineOn) {
         let fuelMult = 1.0;
         if (!isOnRoad(veh.sprite.x, veh.sprite.y)) fuelMult *= 1.35;
@@ -1893,66 +2032,108 @@ function runVehicleLogic(veh, isControlled) {
         veh.fuel = Math.max(0, (veh.fuel || 0) - fuelConsumptionRate);
         if (veh.fuel <= 0) doStall(veh);
 
-        if (autoDriveActive) {
-            const loadRatio = Math.min(1, Math.abs(veh.velocity) / Math.max(0.1, gearMaxSpeed));
-            const isManobra = state.turnPhase !== 'straight';
-            const rpmFloor = isManobra ? 1150 : 1450;
-            const rpmCeil = isManobra ? 1750 : 2150;
-            const targetRpm = Phaser.Math.Linear(rpmFloor, rpmCeil, loadRatio);
-            veh.rpm = Phaser.Math.Linear(veh.rpm, targetRpm, 0.18);
-        } else {
+        const idleRPM = 800;
+        const maxRPM = 2800;
+
+        if (clutchPressed || veh.gear === 0) {
             if (throttleForward || throttleReverse) {
-                let rpmRise = clutchPressed ? 120 : 80;
-                if (!isOnRoad(veh.sprite.x, veh.sprite.y)) rpmRise *= 0.75;
-                if (isToolOn(veh)) rpmRise *= 0.6;
-                veh.rpm += rpmRise;
+                veh.rpm = Phaser.Math.Linear(veh.rpm, maxRPM + 200, 0.12);
             } else {
-                veh.rpm -= 45;
+                veh.rpm = Phaser.Math.Linear(veh.rpm, idleRPM, 0.08);
             }
-            if (!clutchPressed) {
-                const wheelLoad = (Math.abs(veh.velocity) / Math.max(0.1, gearMaxSpeed)) * 900;
-                veh.rpm = Math.max(veh.rpm, 800 + wheelLoad);
+        } else {
+            // RPM baseado na velocidade relativa à marcha ATUAL (Não à velocidade final do veículo)
+            const ratios = m.gears === 6 ? RATIOS_6 : RATIOS_4;
+            const currentGearMaxSpeed = m.speed * (ratios[veh.gear] || 1.0);
+            const speedInGearRatio = Math.abs(veh.velocity) / Math.max(0.1, currentGearMaxSpeed);
+
+            let targetRpm = idleRPM + (speedInGearRatio * (maxRPM - idleRPM));
+
+            // Torque/Slip Effect: Se estiver acelerando, o RPM deve subir para permitir a troca
+            if (throttleForward || throttleReverse) {
+                // Ratios para o cálculo do slip (mesmos da aceleração)
+                const slipRatios = m.gears === 6 ? [1.8, 1.4, 1.1, 0.9, 0.75, 0.6] : [1.6, 1.2, 0.9, 0.7];
+                const gearMult = slipRatios[veh.gear - 1] || 1.0;
+
+                // Em marchas baixas o slip é forte (ajuda a subir), em marchas altas é fraco (ajuda a reduzir se pesado)
+                const slipPower = (1 - speedInGearRatio) * 600 * gearMult;
+                targetRpm += slipPower;
+            }
+
+            // Suavização
+            veh.rpm = Phaser.Math.Linear(veh.rpm, targetRpm, 0.2);
+        }
+
+        veh.rpm = Phaser.Math.Clamp(veh.rpm, idleRPM, 3200);
+
+        // Stall Realista: Se estiver em marcha alta e o RPM cair demais (Lugging/Motor Morrer)
+        if (!autoDriveActive && !clutchPressed && veh.gear >= 3) {
+            const luggingRPM = 1400;
+            // Se tentar acelerar em marcha alta com giro baixo sem embreagem
+            if (veh.rpm < luggingRPM && (throttleForward || throttleReverse)) {
+                doStall(veh);
             }
         }
-        veh.rpm = Phaser.Math.Clamp(veh.rpm, 800, 3000);
 
-        // Stall (Only manual or stalled machines)
-        if (!autoDriveActive) {
-            const lowRpm = veh.rpm < 980;
-            const tooHighGear = veh.gear >= 3 && Math.abs(veh.velocity) < 0.35;
-            const stallProtected = Date.now() < (veh.stallProtectionMs || 0);
-            if (!stallProtected && throttleForward && !clutchPressed && tooHighGear && lowRpm) {
+        // Stall de Parada: Se o giro cair demais com marcha engatada e sem embreagem
+        if (!autoDriveActive && !clutchPressed && veh.gear > 0) {
+            if (veh.rpm < 650 && Math.abs(veh.velocity) < 0.1 && (throttleForward || throttleReverse)) {
                 doStall(veh);
             }
         }
     } else {
-        veh.rpm = Math.max(0, veh.rpm - 35);
+        veh.rpm = Math.max(0, veh.rpm - 50);
     }
 
-    // 6. Auto Shift
+    // 6. Auto Shift (RPM-BASED com Histerese Inteligente)
     const autoShiftEnabled = m.gearType === 'auto' && transMode === 'auto';
     if (autoShiftEnabled && engineOn) {
-        if (Math.abs(veh.velocity) > gearMaxSpeed * 0.9 && veh.gear < m.gears) {
+        // Shifting points ajustados para serem mais sensíveis sob carga
+        const upShiftRPM = 2500;
+        const downShiftRPM = (veh.gear >= 5) ? 1600 : 1300;
+        if (veh.rpm > upShiftRPM && veh.gear < m.gears) {
             veh.gear++;
-        } else if (Math.abs(veh.velocity) < gearMaxSpeed * 0.3 && veh.gear > 1) {
+            veh.rpm -= 800; // Simular queda de giro na troca
+        } else if (veh.rpm < downShiftRPM && veh.gear > 1) {
             veh.gear--;
+            veh.rpm += 600; // Simular pulo de giro na redução
         }
     }
 
     // 7. Auto Work Execution
     if (engineOn && isToolOn(veh) && veh.velocity !== 0) {
-        const tx = Math.floor(veh.sprite.x / TILE) * TILE;
-        const ty = Math.floor(veh.sprite.y / TILE) * TILE;
+        let workX = veh.sprite.x;
+        let workY = veh.sprite.y;
+
+        // Offset if it's a tractor pulling an implement
+        if (veh.type === 'tractor') {
+            const dist = TILE * 0.65;
+            workX -= Math.cos(veh.sprite.rotation) * dist;
+            workY -= Math.sin(veh.sprite.rotation) * dist;
+        }
+
+        const tx = Math.floor(workX / TILE) * TILE;
+        const ty = Math.floor(workY / TILE) * TILE;
         if (tx !== veh.autoDriveState.lastTile.x || ty !== veh.autoDriveState.lastTile.y) {
+            // Aplica a largura correta (Pequeno=1, Medio=2, Grande=3)
             const width = getImplWidth(veh);
             const tiles = [{ x: tx, y: ty }];
+
             if (width >= 2) tiles.push(veh.lastMoveDir === 'h' ? { x: tx, y: ty - TILE } : { x: tx + TILE, y: ty });
             if (width >= 3) tiles.push(veh.lastMoveDir === 'h' ? { x: tx, y: ty + TILE } : { x: tx - TILE, y: ty });
 
             for (const t of tiles) {
                 if (shouldWorkTile(veh, t.x, t.y)) {
-                    if (veh.type === 'harvester') triggerHarvest(veh, t.x, t.y);
-                    if (veh.type === 'tractor') triggerImpl(veh, t.x, t.y);
+                    if (veh.type === 'harvester') {
+                        triggerHarvest(veh, t.x, t.y);
+                        playActionSound('harvest');
+                    }
+                    if (veh.type === 'tractor') {
+                        triggerImpl(veh, t.x, t.y);
+                        const hImplWork = implementSprites.find(i => i.hitchedTo === veh.id);
+                        const implWorkModel = hImplWork ? catalog.implements[hImplWork.modelId] : null;
+                        if (implWorkModel) playActionSound(implWorkModel.type); // plow, harrow, seed
+                    }
 
                     if (veh.autoDriveEnabled) {
                         veh.autoDriveState.workedTiles.add(`${t.x},${t.y}`);
@@ -1962,23 +2143,34 @@ function runVehicleLogic(veh, isControlled) {
             veh.autoDriveState.lastTile = { x: tx, y: ty };
         }
     }
+}
 
-    // 8. Progress tracking
-    if (veh.autoDriveEnabled) {
-        updateAutoDriveProgress(veh);
-        // Active time count (User requirement: only while autodrive is active)
-        veh.autoDriveState.activeTime += (1 / 60); // Assuming 60fps
+let lastActionSoundTime = 0;
+function playActionSound(type) {
+    if (!sfx[type]) return;
+    const now = Date.now();
+    if (now - lastActionSoundTime < 300) return; // Cooldown de 300ms para evitar spam
+
+    try {
+        sfx[type].play({ volume: masterVolume * 0.4 });
+        lastActionSoundTime = now;
+    } catch (e) { }
+}
+
+function playSFX(key, vol = 1) {
+    if (sfx[key]) {
+        try { sfx[key].play({ volume: masterVolume * vol }); } catch (e) { }
     }
 }
 
-function update() {
+function update(time, delta) {
     if (shopOpen) return;
-    if (!keys || !keys.w || !keys.shift) return;
+    if (!keys) return;
 
     // 1. Update each vehicle independently
     vehicleSprites.forEach((veh, idx) => {
-        const isControlled = (idx === activeVehIdx);
-        runVehicleLogic(veh, isControlled);
+        const isControlled = multiplayerMode ? (veh.driverId === socket?.id) : (idx === activeVehIdx);
+        runVehicleLogic(veh, isControlled, delta);
     });
 
     // 2. Sync active vehicle state to globals (Legacy support for HUD/UI)
@@ -2043,7 +2235,7 @@ function update() {
         if (v.type === 'tractor') {
             const hImpl = implementSprites.find(i => i.hitchedTo === v.id);
             if (hImpl && hImpl.sprite) {
-                const dist = TILE * 1.5;
+                const dist = TILE * 0.65;
                 // Use sprite rotation to support both local physics and remote sync
                 const rot = v.sprite.rotation;
                 hImpl.sprite.x = v.sprite.x - Math.cos(rot) * dist;
@@ -2093,6 +2285,30 @@ function update() {
             }
 
             this._lastMoveEmit = Date.now();
+        }
+    }
+
+    updateAudio();
+}
+
+function updateAudio() {
+    const veh = getActiveVehicle();
+    if (!veh || !sfx['engine_loop']) return;
+
+    if (veh.engineOn) {
+        if (!sfx['engine_loop'].isPlaying) {
+            try { sfx['engine_loop'].play(); } catch (e) { }
+        }
+        try {
+            // Dynamic pitch and volume based on RPM/Speed
+            const loadRatio = Math.min(1.5, (veh.rpm || 800) / 2500);
+            const speedFactor = Math.min(1, Math.abs(veh.velocity) / Math.max(0.1, getVehicleModel(veh)?.speed || 5));
+            sfx['engine_loop'].setRate(0.8 + loadRatio * 0.4);
+            sfx['engine_loop'].setVolume(masterVolume * (0.2 + speedFactor * 0.3));
+        } catch (e) { }
+    } else {
+        if (sfx['engine_loop'].isPlaying) {
+            try { sfx['engine_loop'].stop(); } catch (e) { }
         }
     }
 }
@@ -2594,9 +2810,14 @@ function doToggleEngine() {
             console.log("Sem combustível para ligar o motor!");
             return;
         }
+        activeVehicle.engineOn = true;
+        playSFX('engine_start');
+    } else {
+        activeVehicle.engineOn = false;
+        playSFX('engine_stop');
+        if (sfx['engine_loop'].isPlaying) sfx['engine_loop'].stop();
     }
 
-    activeVehicle.engineOn = !activeVehicle.engineOn;
     if (!activeVehicle.engineOn) {
         activeVehicle.toolOn = false;
         const hImpl = implementSprites.find(i => i.hitchedTo === activeVehicle.id);
@@ -2653,30 +2874,34 @@ function doToggleHitch() {
 
     const hitched = implementSprites.find(i => i.hitchedTo === veh.id);
     if (hitched) {
+        // Desengatar — sincronizar attachedImplementId
+        veh.attachedImplementId = null;
+        hitched.hitchedTo = null;
+        hitched.isOn = false;
+        showToast('Implemento desengatado', 'warning');
         if (multiplayerMode && socket && socket.connected) {
-            // Apply locally immediately for instant feedback
-            hitched.hitchedTo = null;
-            hitched.isOn = false;
-            showToast('Implemento desengatado', 'warning');
             socket.emit('detachImplement', { vehicleId: veh.id });
             console.log('[DETACH IMPLEMENT] sent', veh.id);
-        } else {
-            hitched.hitchedTo = null;
-            hitched.isOn = false;
-            showToast('Implemento desengatado', 'warning');
         }
     } else {
         const nearImpl = implementSprites.find(i => !i.hitchedTo && near(veh.sprite, i.sprite, 60));
         if (nearImpl) {
-            if (multiplayerMode && socket && socket.connected) {
-                // Apply locally immediately for instant feedback
-                nearImpl.hitchedTo = veh.id;
+            // Verificar HP insuficiente — aviso mas permite engate
+            const vehicleModel = getVehicleModel(veh);
+            const implCatalog = catalog.implements[nearImpl.modelId];
+            if (implCatalog && vehicleModel && implCatalog.requiredHp > (vehicleModel.power || vehicleModel.hp || 50)) {
+                showToast(`⚠️ HP insuficiente! Requer ${implCatalog.requiredHp} HP — Desempenho reduzido!`, 'warning');
+            }
+
+            // Engatar — sincronizar attachedImplementId
+            nearImpl.hitchedTo = veh.id;
+            veh.attachedImplementId = nearImpl.id;
+            if (implCatalog && vehicleModel && implCatalog.requiredHp <= (vehicleModel.power || vehicleModel.hp || 50)) {
                 showToast('Implemento engatado!', 'success');
+            }
+            if (multiplayerMode && socket && socket.connected) {
                 socket.emit('attachImplement', { vehicleId: veh.id, implementId: nearImpl.id });
                 console.log('[ATTACH IMPLEMENT] sent', veh.id, nearImpl.id);
-            } else {
-                nearImpl.hitchedTo = veh.id;
-                showToast('Implemento engatado!', 'success');
             }
         }
     }
@@ -2692,6 +2917,7 @@ function doToggleVehicle() {
             socket.emit('exitVehicle');
         }
         activeVehIdx = -1;
+        document.getElementById('dashboard').style.display = 'none';
         player.setVisible(true);
         refreshStatusHUD();
         refreshGearHUD();
@@ -3241,7 +3467,7 @@ async function doContextAction() {
     const ent = getEntity();
 
     // Shop
-    if (near(ent, SHOP_POS, 100)) { openShop(); return; }
+    if (near(ent, SHOP_POS, 100)) { playSFX('click'); openShop(); return; }
     // Harvester + silo
     if (isInHarvester() && near(ent, SILO_POS, 80)) {
         try { const d = await apiJson('/action/unload', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
@@ -3279,8 +3505,10 @@ function toggleCellphone() {
         return;
     }
     if (cellphoneOpen) {
+        playSFX('click');
         closeCellphone();
     } else {
+        playSFX('menu');
         openCellphone();
     }
 }
@@ -3365,6 +3593,19 @@ function renderCellphoneMenu(cat) {
         const hitchedIds = new Set(implementSprites.filter(i => i.hitchedTo).map(i => i.id));
         let hasItems = false;
 
+        // SEÇÃO DE GRÃOS
+        if (lastState.farm.harvestedCrops > 0) {
+            hasItems = true;
+            const profit = lastState.farm.harvestedCrops * lastState.economy.pricePerCrop;
+            html += `<div class="cp-category-title">🌾 Produção (Silo)</div>`;
+            html += `<div class="cp-item">
+                <div class="cp-name">Total: ${lastState.farm.harvestedCrops} Grains</div>
+                <div class="cp-price">Valor: $${profit.toLocaleString()}</div>
+                <button class="cp-btn-buy" style="background:#27ae60" onclick="sellGrains()">Vender Tudo</button>
+            </div>`;
+        }
+
+        html += `<div class="cp-category-title">🚜 Seus Veículos</div>`;
         inv.vehicles.forEach(v => {
             const it = catalog.vehicles[v.modelId];
             if (!it || it.price <= 0) return;
@@ -3376,6 +3617,8 @@ function renderCellphoneMenu(cat) {
                 <button class="cp-btn-sell" onclick="sellCellphoneItem('vehicles','${v.id}')">Vender</button>
             </div>`;
         });
+
+        html += `<div class="cp-category-title">⚙️ Seus Implementos</div>`;
         inv.implements.forEach(i => {
             const it = catalog.implements[i.modelId];
             if (!it || it.price <= 0) return;
@@ -3388,7 +3631,24 @@ function renderCellphoneMenu(cat) {
                 <button class="cp-btn-sell" onclick="sellCellphoneItem('implements','${i.id}')" ${isHitched ? 'disabled' : ''}>${isHitched ? 'ENGATADO' : 'Vender'}</button>
             </div>`;
         });
-        
+
+        // SEÇÃO DE TERRAS
+        if (lastState.farm.unlockedLands && lastState.farm.unlockedLands.length > 1) {
+            html += `<div class="cp-category-title">🗺️ Suas Terras</div>`;
+            lastState.farm.unlockedLands.forEach(fid => {
+                if (fid === 'field_1') return;
+                const it = catalog.lands[fid];
+                if (!it || it.price <= 0) return;
+                hasItems = true;
+                const refund = Math.floor(it.price * 0.8);
+                html += `<div class="cp-item">
+                    <div class="cp-name">${it.name}</div>
+                    <div class="cp-price">Receber: $${refund.toLocaleString()}</div>
+                    <button class="cp-btn-sell" onclick="sellCellphoneItem('lands','${fid}')">Vender</button>
+                </div>`;
+            });
+        }
+
         // Terras (Ocultando field_1 que não pode ser vendido)
         if (lastState.farm.unlockedLands) {
             lastState.farm.unlockedLands.forEach(fid => {
@@ -3433,12 +3693,12 @@ async function buyCellphoneItem(cat, id) {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ category: cat, itemId: id })
         });
-        if (d.success) { 
+        if (d.success) {
             showBigAlert(`${catalog[cat][id].name} comprado com sucesso!`);
-            await fetchState(); 
-            renderCellphoneMenu(cat); 
-            ensureVehicles(); 
-            ensureImplements(); 
+            await fetchState();
+            renderCellphoneMenu(cat);
+            ensureVehicles();
+            ensureImplements();
         } else {
             showToast(d.error || 'Erro na compra', 'error');
         }
@@ -3450,14 +3710,15 @@ async function sellCellphoneItem(cat, idx) {
         socket.emit('shopSell', { category: cat, itemId: idx }, async (res) => {
             if (res && res.success) {
                 let itemName = "Item";
-                if (cat === 'lands' && catalog.lands[idx]) itemName = catalog.lands[idx].name;
-                else if (catalog[cat]) {
+                if (cat === 'lands') {
+                    itemName = catalog.lands[idx]?.name || "Terra";
+                } else if (catalog[cat] && lastState.farm.inventory[cat]) {
                     const invItem = lastState.farm.inventory[cat].find(i => i.id === idx);
                     if (invItem && catalog[cat][invItem.modelId]) itemName = catalog[cat][invItem.modelId].name;
                 }
                 showBigAlert(`${itemName} vendido com sucesso!`);
                 await fetchState();
-                renderCellphoneMenu(cat);
+                renderCellphoneMenu('sell');
                 ensureVehicles();
                 ensureImplements();
             } else {
@@ -3469,20 +3730,48 @@ async function sellCellphoneItem(cat, idx) {
     try {
         const d = await apiJson('/shop/sell', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category: cat, index: idx })
+            body: JSON.stringify({ category: cat, itemId: idx })
         });
-        if (d.success) { 
+        if (d.success) {
             let itemName = "Item";
-            if (cat === 'lands' && catalog.lands[idx]) itemName = catalog.lands[idx].name;
-            else if (catalog[cat]) {
+            if (cat === 'lands') {
+                itemName = catalog.lands[idx]?.name || "Terra";
+            } else if (catalog[cat] && lastState.farm.inventory[cat]) {
                 const invItem = lastState.farm.inventory[cat].find(i => i.id === idx);
                 if (invItem && catalog[cat][invItem.modelId]) itemName = catalog[cat][invItem.modelId].name;
             }
             showBigAlert(`${itemName} vendido com sucesso!`);
-            await fetchState(); 
-            renderCellphoneMenu('sell'); 
-            ensureVehicles(); 
-            ensureImplements(); 
+            await fetchState();
+            renderCellphoneMenu('sell');
+            ensureVehicles();
+            ensureImplements();
+        } else {
+            showToast(d.error || 'Erro na venda', 'error');
+        }
+    } catch (e) { }
+}
+
+async function sellGrains() {
+    if (multiplayerMode) {
+        socket.emit('shopSellCrops', {}, async (res) => {
+            if (res && res.success) {
+                showBigAlert(`Grãos vendidos por $${res.profit.toLocaleString()}!`);
+                await fetchState();
+                if (shopOpen) switchTab('sell');
+                if (cellphoneOpen) renderCellphoneMenu('sell');
+            } else {
+                showToast(res ? res.error : 'Erro na venda', 'error');
+            }
+        });
+        return;
+    }
+    try {
+        const d = await apiJson('/shop/sell-crops', { method: 'POST' });
+        if (d.success) {
+            showBigAlert(`Grãos vendidos por $${d.profit.toLocaleString()}!`);
+            await fetchState();
+            if (shopOpen) switchTab('sell');
+            if (cellphoneOpen) renderCellphoneMenu('sell');
         } else {
             showToast(d.error || 'Erro na venda', 'error');
         }
@@ -3498,7 +3787,7 @@ function showBigAlert(msg) {
     }
     alertEl.innerText = msg;
     alertEl.className = 'big-alert-show';
-    
+
     // Reproduzir som se possivel
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -3512,7 +3801,7 @@ function showBigAlert(msg) {
             osc.start();
             osc.stop(ctx.currentTime + 0.15);
         }
-    } catch (e) {}
+    } catch (e) { }
 
     setTimeout(() => {
         alertEl.className = 'big-alert-hide';
@@ -3596,6 +3885,16 @@ function updateDashboard() {
     const rpmBar = document.getElementById('dash-rpm-bar');
     const rpmPct = Math.min(100, Math.max(0, (veh.rpm / 3000) * 100));
     rpmBar.style.width = (isFinite(rpmPct) ? rpmPct : 0) + '%';
+
+    // Efeito de redline (vibração visual e cor)
+    if (veh.rpm > 2700) {
+        const shake = (Math.random() - 0.5) * 3;
+        rpmBar.style.transform = `translateX(${shake}px)`;
+        rpmBar.style.filter = 'brightness(1.5) saturate(1.5)';
+    } else {
+        rpmBar.style.transform = 'none';
+        rpmBar.style.filter = 'none';
+    }
 
     const fuelText = document.getElementById('dash-fuel-text');
     if (fuelText) {
@@ -3759,10 +4058,11 @@ async function fetchCatalog() {
         const d = await apiJson('/shop/catalog');
         catalog = d;
         console.log("Catálogo carregado:", catalog);
-        // Garantir que entidades apareçam se o estado já chegou
         if (lastState) {
             ensureVehicles();
             ensureImplements();
+            updateFields();
+            renderLandZones();
         }
     } catch (e) {
         console.warn("Erro ao carregar catálogo:", e);
@@ -3780,6 +4080,8 @@ async function fetchState() {
         updateHUD(lastState);
         updateSoil(lastState.farm.soil);
         updateCrops(lastState.farm.plantedCrops);
+        updateFields();
+        renderLandZones();
     } catch (e) {
         console.warn("Erro ao carregar estado:", e);
     }
@@ -3794,6 +4096,7 @@ async function advanceHour() {
 }
 
 function openShop() {
+    playSFX('menu');
     shopOpen = true;
     const modal = document.getElementById('shop-modal');
     if (modal) modal.style.display = 'flex';
@@ -3803,6 +4106,7 @@ function openShop() {
 }
 
 function closeShop() {
+    playSFX('click');
     shopOpen = false;
     const modal = document.getElementById('shop-modal');
     if (modal) modal.style.display = 'none';
@@ -3835,11 +4139,11 @@ function switchTab(cat) {
                 harvester: '🌾 Colheitadeiras',
                 truck: '🚚 Caminhões'
             };
-            
+
             for (const typeKey in types) {
                 let hasItems = false;
                 let sectionHtml = `<h3 class="shop-category-title">${types[typeKey]}</h3><div class="shop-grid">`;
-                
+
                 for (const id in items) {
                     const item = items[id];
                     if (item.type !== typeKey || item.price <= 0) continue;
@@ -3892,7 +4196,7 @@ function switchTab(cat) {
             for (const id in items) {
                 const item = items[id];
                 if (item.price <= 0) continue;
-                
+
                 // Hide unique purchases (cellphone & lands)
                 if (cat === 'items' && id === 'cellphone' && lastState.farm.hasCellphone) continue;
                 if (cat === 'lands' && lastState.farm.unlockedLands && lastState.farm.unlockedLands.includes(id)) continue;
@@ -3975,6 +4279,20 @@ function renderSellMenuInShop() {
         });
     }
 
+    // Produção (Grãos no Silo)
+    if (lastState.farm.harvestedCrops > 0) {
+        const profit = lastState.farm.harvestedCrops * lastState.economy.pricePerCrop;
+        html += `
+            <div class="shop-card sell-card" style="border-color: #27ae60">
+                <div class="shop-card-badge" style="background: #27ae60">GRÃOS</div>
+                <div class="item-name">Estoque no Silo</div>
+                <div class="item-desc">${lastState.farm.harvestedCrops} unidades</div>
+                <div class="item-price">Total: $${profit.toLocaleString()}</div>
+                <button class="sell-btn" style="background: #27ae60" onclick="sellGrains()">Vender Tudo</button>
+            </div>
+        `;
+    }
+
     html += '</div>';
     if (html.includes('shop-card')) {
         cont.innerHTML = html;
@@ -3996,6 +4314,7 @@ async function buyItem(cat, id) {
     if (multiplayerMode) {
         socket.emit('shopBuy', { category: cat, itemId: id }, async (res) => {
             if (res && res.success) {
+                playSFX('buy');
                 const item = catalog[cat][id];
                 showBigAlert(`${item.name} comprado com sucesso!`);
                 await fetchState();
@@ -4017,6 +4336,7 @@ async function buyItem(cat, id) {
             body: JSON.stringify({ category: cat, itemId: id })
         });
         if (d.success) {
+            playSFX('buy');
             showBigAlert(`${item.name} comprado com sucesso!`);
             await fetchState();
             const elMoney = document.getElementById('shop-money');
@@ -4024,7 +4344,7 @@ async function buyItem(cat, id) {
             ensureVehicles();
             ensureImplements();
             // Refresh shop UI to remove unique items
-            switchTab(cat); 
+            switchTab(cat);
         } else {
             showToast(d.error || 'Saldo insuficiente', 'error');
         }
@@ -4040,11 +4360,18 @@ async function sellItem(cat, idx) {
     // Busca o modelo para verificar o preço
     let itemPrice = 0;
     if (lastState && catalog) {
-        const inv = lastState.farm.inventory[cat];
-        const item = inv.find(i => i.id === idx);
-        if (item) {
-            const model = catalog[cat][item.modelId];
+        if (cat === 'lands') {
+            const model = catalog.lands[idx];
             if (model) itemPrice = model.price;
+        } else {
+            const inv = lastState.farm.inventory[cat];
+            if (inv) {
+                const item = inv.find(i => i.id === idx);
+                if (item) {
+                    const model = catalog[cat][item.modelId];
+                    if (model) itemPrice = model.price;
+                }
+            }
         }
     }
 
@@ -4058,8 +4385,9 @@ async function sellItem(cat, idx) {
         socket.emit('shopSell', { category: cat, itemId: idx }, async (res) => {
             if (res && res.success) {
                 let itemName = "Item";
-                if (cat === 'lands' && catalog.lands[idx]) itemName = catalog.lands[idx].name;
-                else if (catalog[cat]) {
+                if (cat === 'lands') {
+                    itemName = catalog.lands[idx]?.name || "Terra";
+                } else if (catalog[cat] && lastState.farm.inventory[cat]) {
                     const invItem = lastState.farm.inventory[cat].find(i => i.id === idx);
                     if (invItem && catalog[cat][invItem.modelId]) itemName = catalog[cat][invItem.modelId].name;
                 }
@@ -4080,12 +4408,13 @@ async function sellItem(cat, idx) {
         const d = await apiJson('/shop/sell', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category: cat, index: idx })
+            body: JSON.stringify({ category: cat, itemId: idx })
         });
         if (d.success) {
             let itemName = "Item";
-            if (cat === 'lands' && catalog.lands[idx]) itemName = catalog.lands[idx].name;
-            else if (catalog[cat]) {
+            if (cat === 'lands') {
+                itemName = catalog.lands[idx]?.name || "Terra";
+            } else if (catalog[cat] && lastState.farm.inventory[cat]) {
                 const invItem = lastState.farm.inventory[cat].find(i => i.id === idx);
                 if (invItem && catalog[cat][invItem.modelId]) itemName = catalog[cat][invItem.modelId].name;
             }
@@ -4187,11 +4516,11 @@ function quitToMainMenu() {
     implementSprites.forEach(i => i.sprite.destroy());
     implementSprites = [];
     spawnedImplementIds.clear();
-    
+
     vehiclePositions = {};
     implementPositions = {};
     activeVehIdx = -1;
-    
+
     if (cropsGroup) cropsGroup.clear(true, true);
     if (decoGroup) decoGroup.clear(true, true);
 
@@ -4493,7 +4822,7 @@ function initMultiplayer() {
             const op = otherPlayers[playerInfo.id];
             op.sprite.setPosition(playerInfo.x, playerInfo.y);
             op.sprite.setRotation(playerInfo.angle);
-            
+
             let offsetY = -40;
             if (playerInfo.vehicleId) {
                 const veh = vehicleSprites.find(v => v.id === playerInfo.vehicleId);
@@ -4560,7 +4889,7 @@ function initMultiplayer() {
                 const TILE = 64;
                 const hImpl = implementSprites.find(i => i.id === veh.attachedImplementId);
                 if (hImpl) {
-                    const dist = TILE * 1.5;
+                    const dist = TILE * 0.65;
                     const rot = vehData.angle;
                     hImpl.sprite.x = vehData.x - Math.cos(rot) * dist;
                     hImpl.sprite.y = vehData.y - Math.sin(rot) * dist;
