@@ -6,10 +6,8 @@ window.addEventListener('load', () => {
 });
 
 function checkVersion() {
-    const lastSeen = localStorage.getItem('lastSeenVersion');
-    if (lastSeen !== GAME_VERSION) {
-        showUpdate();
-    }
+    // Agora configurado para aparecer toda vez que entrar no site
+    showUpdate();
 }
 
 function showUpdate() {
@@ -22,7 +20,7 @@ function closeUpdate() {
     versionModalOpen = false;
     const modal = document.getElementById('update-modal');
     if (modal) modal.style.display = 'none';
-    localStorage.setItem('lastSeenVersion', GAME_VERSION);
+    // Removido o localStorage.setItem para aparecer sempre
 }
 
 // ============================================================
