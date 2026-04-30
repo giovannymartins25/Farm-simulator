@@ -141,9 +141,18 @@ function createRoomState(roomId, isPrivate, code) {
     },
     playerInventories: {}, // playerId -> { vehicles: [], implements: [], hasCellphone: false }
     vehicles: {
-      'veh_1': { id: 'veh_1', modelId: 'tractor_mf275', ownerId: 'server', driverId: null, passengers: [], fuel: 50, attachedImplementId: null, x: 4480, y: 5696, rotation: 0, velocity: 0, engineOn: false },
-      'veh_2': { id: 'veh_2', modelId: 'harvester_mf5650', ownerId: 'server', driverId: null, passengers: [], fuel: 100, attachedImplementId: null, x: 4544, y: 5696, rotation: 0, velocity: 0, engineOn: false },
-      'veh_3': { id: 'veh_3', modelId: 'truck_vw', ownerId: 'server', driverId: null, passengers: [], fuel: 150, attachedImplementId: null, x: 4608, y: 5696, rotation: 0, velocity: 0, engineOn: false }
+      'veh_1': { id: 'veh_1', modelId: 'tractor_mf275', ownerId: 'server', driverId: null, passengers: [], fuel: 50, attachedImplementId: null, x: 4480, y: 5696, rotation: 0, velocity: 0, engineOn: false, 
+        upgrades: { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: false, hasMonitor: false },
+        condition: { engine: 1.0, tires: 1.0 }
+      },
+      'veh_2': { id: 'veh_2', modelId: 'harvester_mf5650', ownerId: 'server', driverId: null, passengers: [], fuel: 100, attachedImplementId: null, x: 4544, y: 5696, rotation: 0, velocity: 0, engineOn: false,
+        upgrades: { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: false, hasMonitor: false },
+        condition: { engine: 1.0, tires: 1.0 }
+      },
+      'veh_3': { id: 'veh_3', modelId: 'truck_vw', ownerId: 'server', driverId: null, passengers: [], fuel: 150, attachedImplementId: null, x: 4608, y: 5696, rotation: 0, velocity: 0, engineOn: false,
+        upgrades: { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: false, hasMonitor: false },
+        condition: { engine: 1.0, tires: 1.0 }
+      }
     },
     implements: {
       'imp_1': { id: 'imp_1', modelId: 'plow_small', ownerId: 'server', seedStorage: 0, attachedToVehicleId: null },
@@ -466,7 +475,17 @@ io.on('connection', (socket) => {
       if (!it || room.farm.money < it.price) { if(ack) ack({success: false, error: 'Saldo insuficiente'}); return; }
       room.farm.money -= it.price;
       const id = `veh_${room.counters.vehicle++}`;
-      room.vehicles[id] = { id, modelId: itemId, ownerId: socket.id, driverId: null, passengers: [], fuel: it.fuelCapacity || 100, attachedImplementId: null, x: player.x, y: player.y, rotation: 0, velocity: 0, engineOn: false };
+      room.vehicles[id] = { 
+        id, modelId: itemId, ownerId: socket.id, driverId: null, passengers: [], fuel: it.fuelCapacity || 100, attachedImplementId: null, x: player.x, y: player.y, rotation: 0, velocity: 0, engineOn: false,
+        upgrades: { 
+          engineLevel: 1, 
+          turboLevel: (itemId.includes('jd') || itemId.includes('case')) ? 1 : 0, 
+          tireType: 'standard', 
+          hasAutoDrive: it.autoDrive || false, 
+          hasMonitor: (it.gears === 6) 
+        },
+        condition: { engine: 1.0, tires: 1.0 }
+      };
       inv.vehicles.push(id);
     } else if (category === 'implements') {
       const it = CATALOG.implements[itemId];
@@ -569,6 +588,80 @@ io.on('connection', (socket) => {
     
     broadcastRoomState(player.roomId);
     if (ack) ack({ success: true, profit });
+  });
+
+  socket.on('workshopUpgrade', ({ vehicleId, category, type }, ack) => {
+    const player = players[socket.id];
+    if (!player || !player.roomId) return ack?.({ success: false, error: 'Sem sala' });
+    const room = rooms[player.roomId];
+    const veh = room.vehicles[vehicleId];
+    if (!veh) return ack?.({ success: false, error: 'Veículo não encontrado' });
+
+    let cost = 0;
+    let updateFn = null;
+
+    if (category === 'motor') {
+      if (veh.upgrades.engineLevel === type) return ack?.({ success: false, error: 'Já possui este nível' });
+      if (type === 1) { cost = 500; updateFn = () => veh.upgrades.engineLevel = 1; }
+      else if (type === 2) { cost = 2000; updateFn = () => veh.upgrades.engineLevel = 2; }
+      else if (type === 3) { cost = 5000; updateFn = () => veh.upgrades.engineLevel = 3; }
+      else return ack?.({ success: false, error: 'Nível inválido' });
+    } else if (category === 'turbo') {
+      const current = veh.upgrades.turboLevel || 0;
+      if (current >= 2) return ack?.({ success: false, error: 'Já possui o turbo máximo' });
+      const is6G = (catalog.vehicles[veh.modelId]?.gears === 6);
+      const targetLevel = (is6G && current === 0) ? 2 : (current + 1);
+      
+      cost = targetLevel === 1 ? 3500 : 2000;
+      updateFn = () => veh.upgrades.turboLevel = targetLevel;
+    } else if (category === 'tires') {
+      if (veh.upgrades.tireType === type) return ack?.({ success: false, error: 'Já possui este pneu' });
+      cost = 1200; updateFn = () => veh.upgrades.tireType = type;
+    } else if (category === 'systems') {
+      if (type === 'autodrive') {
+        const model = catalog.vehicles[veh.modelId];
+        if (model && model.type === 'truck') return ack?.({ success: false, error: 'Caminhões não suportam AutoDrive' });
+        if (veh.upgrades.hasAutoDrive) return ack?.({ success: false, error: 'Já possui' });
+        cost = 2500; updateFn = () => veh.upgrades.hasAutoDrive = true;
+      } else if (type === 'monitor') {
+        if (veh.upgrades.hasMonitor) return ack?.({ success: false, error: 'Já possui' });
+        cost = 1500; updateFn = () => veh.upgrades.hasMonitor = true;
+      } else if (type === 'autotrans') {
+        if (veh.upgrades.hasAutoTrans) return ack?.({ success: false, error: 'Já possui' });
+        cost = 3000; updateFn = () => veh.upgrades.hasAutoTrans = true;
+      }
+    }
+
+    if (cost > 0 && room.farm.money >= cost) {
+      room.farm.money -= cost;
+      updateFn();
+      broadcastRoomState(player.roomId);
+      ack?.({ success: true });
+    } else {
+      ack?.({ success: false, error: 'Saldo insuficiente' });
+    }
+  });
+
+  socket.on('workshopRepair', ({ vehicleId }, ack) => {
+    const player = players[socket.id];
+    if (!player || !player.roomId) return ack?.({ success: false, error: 'Sem sala' });
+    const room = rooms[player.roomId];
+    const veh = room.vehicles[vehicleId];
+    if (!veh) return ack?.({ success: false, error: 'Veículo não encontrado' });
+
+    const damage = (1.0 - veh.condition.engine) + (1.0 - veh.condition.tires);
+    if (damage <= 0) return ack?.({ success: false, error: 'Veículo em perfeito estado' });
+
+    const cost = Math.floor(damage * 100 * 50); // $50 por cada 1% de dano total
+    if (room.farm.money >= cost) {
+      room.farm.money -= cost;
+      veh.condition.engine = 1.0;
+      veh.condition.tires = 1.0;
+      broadcastRoomState(player.roomId);
+      ack?.({ success: true });
+    } else {
+      ack?.({ success: false, error: 'Saldo insuficiente' });
+    }
   });
 
   socket.on('actionPlow', ({ x, y }) => {

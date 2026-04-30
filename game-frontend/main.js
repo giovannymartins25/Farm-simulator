@@ -1,3 +1,30 @@
+const GAME_VERSION = "1.2";
+let versionModalOpen = false;
+
+window.addEventListener('load', () => {
+    checkVersion();
+});
+
+function checkVersion() {
+    const lastSeen = localStorage.getItem('lastSeenVersion');
+    if (lastSeen !== GAME_VERSION) {
+        showUpdate();
+    }
+}
+
+function showUpdate() {
+    versionModalOpen = true;
+    const modal = document.getElementById('update-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeUpdate() {
+    versionModalOpen = false;
+    const modal = document.getElementById('update-modal');
+    if (modal) modal.style.display = 'none';
+    localStorage.setItem('lastSeenVersion', GAME_VERSION);
+}
+
 // ============================================================
 //  CONFIG — Fullscreen FIT
 // ============================================================
@@ -394,6 +421,71 @@ function handleLocalApi(path, options = {}) {
         return { success: false, message: 'Categoria invalida' };
     }
 
+    if (path === '/workshop/upgrade' && method === 'POST') {
+        const { vehicleId, category, type } = body;
+        const veh = state.farm.inventory.vehicles.find(v => v.id === vehicleId);
+        if (!veh) return { success: false, error: 'Veiculo nao encontrado' };
+        const m = LOCAL_CATALOG.vehicles[veh.modelId] || {};
+        let cost = 0;
+        if (category === 'motor') {
+            if (type === 1) cost = 500;
+            else if (type === 2) cost = 2000; 
+            else if (type === 3) cost = 5000;
+        } else if (category === 'turbo') {
+            const currentLvl = veh.upgrades.turboLevel || 0;
+            if (currentLvl >= 2) return { success: false, error: 'Turbo já está no máximo!' };
+            
+            // Lógica igual ao servidor: 6 marchas pulam do 0 pro 2 se for o caso, ou apenas incrementa
+            const is6G = (m.gears === 6);
+            const nextLvl = (is6G && currentLvl === 0) ? 2 : (currentLvl + 1);
+            
+            cost = nextLvl === 1 ? 3500 : 2000;
+            if (lastState.farm.money < cost) return { success: false, error: 'Dinheiro insuficiente' };
+            
+            lastState.farm.money -= cost;
+            veh.upgrades.turboLevel = nextLvl;
+            return { success: true, msg: nextLvl === 2 ? 'Turbo Stage 2 Instalado!' : 'Turbo Stage 1 Instalado!' };
+        } else if (category === 'tires') {
+            cost = 1200;
+            if (lastState.farm.money < cost) return { success: false, error: 'Dinheiro insuficiente' };
+            lastState.farm.money -= cost;
+            veh.upgrades.tireType = type;
+            return { success: true, msg: 'Pneus trocados!' };
+        }
+        else if (category === 'systems') {
+            if (type === 'autodrive') cost = 2500;
+            else if (type === 'monitor') cost = 1500;
+            else if (type === 'autotrans') cost = 3000;
+        }
+
+        if (state.farm.money < cost) return { success: false, error: 'Saldo insuficiente' };
+        state.farm.money -= cost;
+        if (!veh.upgrades) veh.upgrades = { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: false, hasMonitor: false, hasAutoTrans: false };
+        if (category === 'motor') veh.upgrades.engineLevel = type;
+        else if (category === 'turbo') veh.upgrades.turboLevel = 1;
+        else if (category === 'tires') veh.upgrades.tireType = type;
+        else if (category === 'systems') {
+            if (type === 'autodrive') veh.upgrades.hasAutoDrive = true;
+            else if (type === 'monitor') veh.upgrades.hasMonitor = true;
+            else if (type === 'autotrans') veh.upgrades.hasAutoTrans = true;
+        }
+        normalizeState(state);
+        return { success: true };
+    }
+
+    if (path === '/workshop/repair' && method === 'POST') {
+        const { vehicleId } = body;
+        const veh = state.farm.inventory.vehicles.find(v => v.id === vehicleId);
+        if (!veh) return { success: false, error: 'Veiculo nao encontrado' };
+        const damage = (1.0 - (veh.condition?.engine || 1)) + (1.0 - (veh.condition?.tires || 1));
+        const cost = Math.floor(damage * 100 * 50);
+        if (state.farm.money < cost) return { success: false, error: 'Saldo insuficiente' };
+        state.farm.money -= cost;
+        veh.condition = { engine: 1.0, tires: 1.0 };
+        normalizeState(state);
+        return { success: true };
+    }
+
     if (path === '/action/plow' && method === 'POST') {
         const { x, y } = body;
         const key = `${x},${y}`;
@@ -580,6 +672,9 @@ let otherPlayers = {}; // { socketId: { sprite, text } }
 const HOUSE_POS = { x: 4480, y: 5760 };
 const SILO_POS = { x: 4992, y: 5760 };
 const SHOP_POS = { x: 5504, y: 5760 };
+const WORKSHOP_POS = { x: 5760, y: 5760 }; // Oficina ao lado da loja
+const FUEL_STATION_POS = { x: 3072, y: 2048 };
+const TRUCK_SELL_POS = { x: 6784, y: 1536 };
 const SELL_POS = { x: 6016, y: 5760 };
 const GAS_STATION_POS = { x: 6528, y: 5760 };
 const IMPL_BARN_START = { x: 3968, y: 5824 };
@@ -691,11 +786,14 @@ function create() {
     this.add.sprite(HOUSE_POS.x, HOUSE_POS.y, 'house').setDepth(1);
     this.add.sprite(SILO_POS.x, SILO_POS.y, 'silo').setDepth(1);
     this.add.sprite(SHOP_POS.x, SHOP_POS.y, 'shop_bld').setDepth(1);
+    this.add.sprite(WORKSHOP_POS.x, WORKSHOP_POS.y, 'shop_bld').setDepth(1).setTint(0xff9900);
     this.add.sprite(SELL_POS.x, SELL_POS.y, 'sell_bld').setDepth(1);
     this.add.sprite(GAS_STATION_POS.x, GAS_STATION_POS.y, 'gas_station').setDepth(1);
+    
     const ls = { font: '11px Courier New', fill: '#fff', backgroundColor: '#000a' };
     this.add.text(SILO_POS.x - 14, SILO_POS.y - 52, 'SILO', ls).setDepth(5);
     this.add.text(SHOP_POS.x - 14, SHOP_POS.y - 52, 'LOJA', ls).setDepth(5);
+    this.add.text(WORKSHOP_POS.x - 25, WORKSHOP_POS.y - 52, 'OFICINA', ls).setDepth(5);
     this.add.text(SELL_POS.x - 18, SELL_POS.y - 52, 'VENDA', ls).setDepth(5);
     this.add.text(GAS_STATION_POS.x - 18, GAS_STATION_POS.y - 52, 'POSTO', ls).setDepth(5);
     this.add.text(HOUSE_POS.x - 14, HOUSE_POS.y - 52, 'CASA', ls).setDepth(5);
@@ -751,7 +849,14 @@ function create() {
     keys.left.on('down', () => cycleVehicles(-1, this));
     keys.right.on('down', () => cycleVehicles(1, this));
     keys.m.on('down', toggleFullMap);
-    keys.n.on('down', () => { monitorVisible = !monitorVisible; });
+    keys.n.on('down', () => { 
+        const v = getActiveVehicle();
+        if (v?.upgrades?.hasMonitor || getVehicleModel(v)?.autoDrive) {
+            monitorVisible = !monitorVisible; 
+        } else {
+            showToast('Requer Monitor de Campo', 'warning');
+        }
+    });
     keys.z.on('down', toggleCellphone);
     keys.b.on('down', toggleChat);
     // Removemos doRefuel em on('down') pois será contínuo no update()
@@ -883,11 +988,15 @@ function getAutoDriveLaneStep(veh) {
 }
 
 function hasAutoShiftCapability() {
-    return getActiveModel()?.gearType === 'auto';
+    const v = getActiveVehicle();
+    const m = getVehicleModel(v);
+    return m?.gearType === 'auto' || v?.upgrades?.hasAutoTrans;
 }
 
 function hasAutoDriveCapability() {
-    return !!getActiveModel()?.autoDrive;
+    const v = getActiveVehicle();
+    const m = getVehicleModel(v);
+    return !!m?.autoDrive || v?.upgrades?.hasAutoDrive;
 }
 
 function canUseAutoMode() {
@@ -1151,7 +1260,7 @@ function triggerAutoDriveFallback(veh) {
 function canAutoDriveNow(veh) {
     if (!veh) return { ok: false, reason: 'Entre em um veiculo para usar o AUTO DRIVE' };
     const model = catalog.vehicles[veh.modelId];
-    if (!model || !model.autoDrive) return { ok: false, reason: 'Este veiculo nao possui piloto automatico' };
+    if (!model || (!model.autoDrive && !veh.upgrades?.hasAutoDrive)) return { ok: false, reason: 'Este veiculo nao possui piloto automatico' };
     if (!veh.engineOn) return { ok: false, reason: 'Ligue o motor para ativar o AUTO DRIVE' };
 
     const fieldInfo = getOwnedFieldAtPoint(veh.sprite.x, veh.sprite.y);
@@ -1893,11 +2002,24 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
     // 2️⃣ PERFORMANCE RELATIVA AO PESO BASE
     // Veículo sozinho = 1.0, com implemento = proporcionalmente menor
     const baseWeight = (m.weight || 3000);
+    
+    // NOVO: Bônus de Motor Upgrade (Aumentado para ser mais perceptível)
+    let engineBonus = 0;
+    if (veh.upgrades?.engineLevel === 2) engineBonus = 0.35; // +35%
+    else if (veh.upgrades?.engineLevel === 3) engineBonus = 0.70; // +70%
+
+    // NOVO: Impacto da Condição (Desgaste)
+    const engineCondition = veh.condition?.engine || 1.0;
+    const tiresCondition = veh.condition?.tires || 1.0;
+
     let finalPower = Phaser.Math.Clamp(baseWeight / totalLoad, 0.15, 1.0);
+    finalPower *= (1 + engineBonus);
+    finalPower *= (0.4 + (engineCondition * 0.6)); // Motor 0% cond = 40% power
 
     // 2.5️⃣ PENALIDADE POR HP INSUFICIENTE (não bloqueia, mas pune severamente)
     if (implModelPhysics && implModelPhysics.requiredHp) {
-        const hpRatio = (m.power || 50) / implModelPhysics.requiredHp;
+        const currentHp = (m.power || 50) * (1 + engineBonus);
+        const hpRatio = currentHp / implModelPhysics.requiredHp;
         if (hpRatio < 1) {
             // Penalidade quadrática: 50% HP → 25% performance, 33% HP → 11% performance
             finalPower *= Math.pow(hpRatio, 2);
@@ -1906,8 +2028,15 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
     finalPower = Math.max(0.05, finalPower); // Mínimo absoluto para não travar
 
     // 3️⃣ PESO REDUZ VELOCIDADE MÁXIMA (mesma lógica: peso base / peso total)
+    // NOVO: Pneus influenciam velocidade máxima
+    let tireSpeedMod = 1.0;
+    const tireType = veh.upgrades?.tireType || 'standard';
+    if (tireType === 'agriculture') tireSpeedMod = 0.85;
+    else if (tireType === 'road') tireSpeedMod = 1.35;
+    else if (tireType === 'wide') tireSpeedMod = 0.92;
+
     const loadPenalty = Phaser.Math.Clamp(baseWeight / totalLoad, 0.25, 1.0);
-    const finalMaxSpeed = gearMaxSpeed * loadPenalty;
+    const finalMaxSpeed = gearMaxSpeed * loadPenalty * tireSpeedMod * (0.75 + (tiresCondition * 0.25));
 
     // 4️⃣ RESISTÊNCIA CONTÍNUA do peso (proporcional)
     const weightDrag = totalLoad * 0.000002;
@@ -1926,6 +2055,39 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
 
         // Aceleração depende da carga através de finalPower
         let accel = baseAccel * gearMult * finalPower;
+
+        // NOVO: Turbo Boost Realista com Inércia (Spooling) - Corrigido para 4 marchas
+        let maxTurboLevel = veh.upgrades?.turboLevel || 0;
+        if (m.gears === 6 && maxTurboLevel < 1) maxTurboLevel = 1; // 6 marchas já tem T1
+        
+        if (maxTurboLevel > 0) {
+            if (veh.turboPressure === undefined) veh.turboPressure = 0;
+            
+            // Spool up if throttle is pressed
+            const targetBoost = (throttleForward || throttleReverse) ? 1.0 : 0.0;
+            const spoolRate = targetBoost > veh.turboPressure ? 0.08 : 0.12; // Muito mais rápido
+            veh.turboPressure += (targetBoost - veh.turboPressure) * spoolRate;
+            
+            // Força física e BAR dependem da RPM
+            const rpmFactor = Math.max(0, (veh.rpm - 1000) / 2000); // 0.0 a 1.0
+            const boostCap = maxTurboLevel === 1 ? 0.40 : 0.85; 
+            const boost = boostCap * veh.turboPressure * rpmFactor;
+            
+            accel *= (1 + boost);
+            veh.turboBoost = veh.turboPressure * rpmFactor; // Valor real em percentual da BAR máxima
+            veh.currentTurboLevel = maxTurboLevel;
+        } else {
+            veh.turboBoost = 0;
+            veh.turboPressure = 0;
+            veh.currentTurboLevel = 0;
+        }
+
+        // NOVO: Pneus influenciam aceleração/grip
+        let tireGrip = 1.0;
+        if (tireType === 'agriculture') tireGrip = 1.3;
+        else if (tireType === 'road') tireGrip = 0.8;
+        else if (tireType === 'wide') tireGrip = 1.15;
+        accel *= tireGrip;
 
         if (!isOnRoad(veh.sprite.x, veh.sprite.y)) accel *= 0.65;
         // Resistência do implemento ligado (multiplicador, não subtração)
@@ -2032,6 +2194,19 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
         veh.fuel = Math.max(0, (veh.fuel || 0) - fuelConsumptionRate);
         if (veh.fuel <= 0) doStall(veh);
 
+        // NOVO: Sistema de Desgaste (Wear)
+        if (!veh.condition) veh.condition = { engine: 1.0, tires: 1.0 };
+        const wearBase = 0.000002;
+        const loadWearFactor = (totalLoad / baseWeight);
+        const rpmWearFactor = (veh.rpm / 1000);
+        const turboWearFactor = (veh.upgrades?.turboLevel >= 1) ? 1.4 : 1.0;
+
+        veh.condition.engine -= wearBase * loadWearFactor * rpmWearFactor * turboWearFactor * frameMult;
+        veh.condition.tires -= wearBase * (Math.abs(veh.velocity) / 5) * loadWearFactor * frameMult;
+        
+        veh.condition.engine = Math.max(0, veh.condition.engine);
+        veh.condition.tires = Math.max(0, veh.condition.tires);
+
         const idleRPM = 800;
         const maxRPM = 2800;
 
@@ -2086,7 +2261,7 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
     }
 
     // 6. Auto Shift (RPM-BASED com Histerese Inteligente)
-    const autoShiftEnabled = m.gearType === 'auto' && transMode === 'auto';
+    const autoShiftEnabled = (m.gearType === 'auto' || veh.upgrades?.hasAutoTrans) && transMode === 'auto';
     if (autoShiftEnabled && engineOn) {
         // Shifting points ajustados para serem mais sensíveis sob carga
         const upShiftRPM = 2500;
@@ -2583,6 +2758,8 @@ function ensureVehicles() {
         const modelId = veh.modelId;
         const existing = vehicleSprites.find(v => v.id === veh.id);
         if (existing) {
+            existing.upgrades = veh.upgrades;
+            existing.condition = veh.condition;
             return;
         }
         if (!spawnedVehicleIds.has(veh.id)) {
@@ -2955,11 +3132,10 @@ function doToggleVehicle() {
             }
 
             maxGears = (m?.gears || 4);
-            transMode = (m?.gearType === 'auto') ? 'auto' : 'manual';
+            transMode = (m?.gearType === 'auto' || activeVehicle.upgrades?.hasAutoTrans) ? 'auto' : 'manual';
 
-            // Auto-ativar monitor de campo para máquinas avançadas
-            if (Number(maxGears) === 6 && (m?.autoDrive)) {
-                console.log("Auto-ativando monitor para:", m.name, "Gears:", m.gears);
+            // Auto-ativar monitor de campo para máquinas avançadas ou com upgrade
+            if ((Number(m?.gears) === 6 && m?.autoDrive) || activeVehicle.upgrades?.hasMonitor) {
                 monitorVisible = true;
             }
 
@@ -3085,6 +3261,7 @@ function renderWorldMap() {
     });
 
     drawZone('Loja', SHOP_POS, '#f1c40f');
+    drawZone('Oficina', WORKSHOP_POS, '#f39c12');
     drawZone('Silo', SILO_POS, '#9b59b6');
     drawZone('Venda', SELL_POS, '#e67e22');
     drawZone('Fazenda', HOUSE_POS, '#3498db');
@@ -3163,6 +3340,7 @@ function renderMiniMap() {
 
     // POIs: Loja (Roxo), Silo (Laranja)
     drawDot(SHOP_POS.x, SHOP_POS.y, '#a855f7', 4); // Loja - Roxo
+    drawDot(WORKSHOP_POS.x, WORKSHOP_POS.y, '#f59e0b', 4); // Oficina - Laranja
     drawDot(SILO_POS.x, SILO_POS.y, '#f97316', 4); // Silo - Laranja
     drawDot(SELL_POS.x, SELL_POS.y, '#eab308', 3); // Venda
 
@@ -3235,8 +3413,8 @@ function renderFieldMonitor() {
     const veh = getActiveVehicle();
     const model = getVehicleModel(veh);
 
-    // Visibilidade estrita: 6 marchas + autodrive + monitorVisible
-    const shouldShow = veh && model && Number(model.gears) === 6 && model.autoDrive && monitorVisible;
+    // Visibilidade estrita: monitorVisible ativo E (veículo avançado OU upgrade)
+    const shouldShow = veh && model && (model.autoDrive || veh.upgrades?.hasMonitor) && monitorVisible;
 
     if (!shouldShow) {
         monDiv.style.display = 'none';
@@ -3462,12 +3640,243 @@ function openSellMenu() {
     renderSellMenu('vehicles');
 }
 
+// ============================================================================
+// 🛠️ VEHICLE WORKSHOP SYSTEM
+// ============================================================================
+
+let workshopOpen = false;
+let currentWorkshopTab = 'motor';
+
+function openWorkshop() {
+    const v = getActiveVehicle();
+    if (!v) return;
+    workshopOpen = true;
+    shopOpen = true; // Block movement
+    document.getElementById('workshop-modal').style.display = 'flex';
+    renderWorkshopContent();
+}
+
+function closeWorkshop() {
+    workshopOpen = false;
+    shopOpen = false;
+    document.getElementById('workshop-modal').style.display = 'none';
+}
+
+function switchWorkshopTab(tab) {
+    currentWorkshopTab = tab;
+    const tabs = document.querySelectorAll('#workshop-modal .shop-tab');
+    tabs.forEach(t => {
+        t.classList.remove('active');
+        const txt = t.innerText.toLowerCase();
+        if (txt.includes(tab) || (tab === 'tires' && txt.includes('pneus')) || (tab === 'systems' && txt.includes('sistemas'))) {
+            t.classList.add('active');
+        }
+    });
+    renderWorkshopContent();
+}
+
+function renderWorkshopContent() {
+    const v = getActiveVehicle();
+    if (!v || !catalog) return;
+    const m = catalog.vehicles[v.modelId];
+
+    document.getElementById('ws-veh-name').innerText = m.name;
+    document.getElementById('ws-money').innerText = lastState.farm.money.toLocaleString();
+
+    // Stats
+    let engineBonus = 0;
+    if (v.upgrades?.engineLevel === 2) engineBonus = 0.35;
+    else if (v.upgrades?.engineLevel === 3) engineBonus = 0.70;
+    const currentHp = Math.round(m.power * (1 + engineBonus));
+
+    let statsHtml = `
+        <div style="font-size: 16px; color: #fff; margin-bottom: 5px;">Potência: <b style="color:#2ecc71;">${currentHp} HP</b></div>
+        <div style="font-size: 11px; margin-bottom: 10px;">(Base de Fábrica: ${m.power} HP)</div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div>Nível Motor: <b>Lvl ${v.upgrades?.engineLevel || 1}</b></div>
+            <div>Turbo: <b>${v.upgrades?.turboLevel >= 1 ? '<span style="color:#38bdf8">Instalado</span>' : 'Não'}</b></div>
+            <div>Pneus: <b style="text-transform:capitalize;">${v.upgrades?.tireType || 'Padrão'}</b></div>
+        </div>
+    `;
+    document.getElementById('ws-veh-stats').innerHTML = statsHtml;
+
+    // Condição Bar
+    const avgCond = ((v.condition?.engine || 1) + (v.condition?.tires || 1)) / 2;
+    const condBar = document.getElementById('ws-cond-bar');
+    if (condBar) {
+        condBar.style.width = (avgCond * 100) + '%';
+        condBar.style.backgroundColor = avgCond < 0.3 ? '#e74c3c' : (avgCond < 0.6 ? '#f1c40f' : '#2ecc71');
+    }
+
+    // Upgrade List
+    let html = '';
+    const up = v.upgrades || { engineLevel: 1, turboLevel: 0, tireType: 'standard' };
+
+    if (currentWorkshopTab === 'motor') {
+        const levels = [
+            { lvl: 1, price: 500, desc: 'Configuração de Fábrica (Padrão)', icon: '⚙️' },
+            { lvl: 2, price: 2000, desc: 'Turbo-Intercooler (+35% Power)', icon: '⚡' },
+            { lvl: 3, price: 5000, desc: 'Competition Remap (+70% Power)', icon: '🔥' }
+        ];
+        levels.forEach(l => {
+            const owned = up.engineLevel === l.lvl;
+            html += renderWSItem('motor', l.lvl, l.icon, `Motor Estágio ${l.lvl}`, l.desc, l.price, owned);
+        });
+    } else if (currentWorkshopTab === 'turbo') {
+        let currentLevel = up.turboLevel || 0;
+        if (m.gears === 6 && currentLevel < 1) currentLevel = 1;
+        
+        if (currentLevel === 0) {
+            html += renderWSItem('turbo', 1, '🐌', 'Kit Turbo Stage 1', 'Instalação de turbo para 0.5 BAR', 3500, false);
+        } else if (currentLevel === 1) {
+            html += renderWSItem('turbo', 2, '🐌', 'Kit Turbo Stage 2', 'Upgrade para 1.0 BAR de pressão', 2000, false, 'MELHORAR');
+        } else {
+            html += renderWSItem('turbo', 2, '🐌', 'Turbo High Performance', 'Máxima pressão (1.0 BAR) instalada', 2000, true);
+        }
+    } else if (currentWorkshopTab === 'pneus' || currentWorkshopTab === 'tires') {
+        const tires = [
+            { id: 'standard', name: 'Pneus Padrão', desc: 'Equilíbrio para todo terreno', icon: '🛞' },
+            { id: 'agriculture', name: 'Garras Agrícolas', desc: '+Tração na terra / -Velocidade', icon: '🚜' },
+            { id: 'road', name: 'Perfil de Estrada', desc: '+35% Velocidade no asfalto', icon: '🛣️' },
+            { id: 'wide', name: 'Pneus Largos', desc: 'Melhor para cargas pesadas', icon: '🐘' }
+        ];
+        tires.forEach(t => {
+            const owned = up.tireType === t.id;
+            html += renderWSItem('tires', t.id, t.icon, t.name, t.desc, 1200, owned);
+        });
+    } else if (currentWorkshopTab === 'sistemas') {
+        const hasAD = up.hasAutoDrive || m.autoDrive;
+        const hasMon = up.hasMonitor;
+        const hasAT = up.hasAutoTrans || m.gearType === 'auto';
+
+        if (m.type !== 'truck') {
+            html += renderWSItem('systems', 'autodrive', '🤖', 'Módulo AutoDrive', 'Piloto automático de trabalho', 2500, hasAD);
+        }
+        html += renderWSItem('systems', 'monitor', '🖥️', 'Monitor de Campo', 'Dados avançados no painel', 1500, hasMon);
+        html += renderWSItem('systems', 'autotrans', '⚙️', 'Transmissão Automática', 'Conversão para câmbio automático', 3000, hasAT);
+    }
+
+    document.getElementById('workshop-upgrade-list').innerHTML = html;
+
+    // Repair Button
+    const damage = (1.0 - (v.condition?.engine || 1)) + (1.0 - (v.condition?.tires || 1));
+    const repairCost = Math.floor(damage * 100 * 50);
+    const repairBtn = document.getElementById('ws-repair-btn');
+    if (repairBtn) {
+        if (damage <= 0.01) {
+            repairBtn.innerText = '✅ Perfeito Estado';
+            repairBtn.disabled = true;
+            repairBtn.style.opacity = 0.5;
+        } else {
+            repairBtn.innerText = `🛠️ Reparar Tudo ($${repairCost})`;
+            repairBtn.disabled = false;
+            repairBtn.style.opacity = 1;
+        }
+    }
+}
+
+function renderWSItem(cat, type, icon, name, desc, price, owned, customText = null) {
+    const afford = lastState.farm.money >= price;
+    const btnLabel = customText || (owned ? 'ADQUIRIDO' : 'COMPRAR');
+    return `
+        <div class="shop-card" style="flex-direction: row; align-items: center; gap: 15px; padding: 12px; margin-bottom: 8px;">
+            <div style="font-size: 30px;">${icon}</div>
+            <div style="flex: 1;">
+                <div style="font-weight: bold; color: #fff;">${name}</div>
+                <div style="font-size: 11px; color: #94a3b8;">${desc}</div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-weight: bold; color: #2ecc71; margin-bottom: 5px;">${owned ? 'Instalado' : '$'+price.toLocaleString()}</div>
+                <button class="buy-btn" style="width: auto; padding: 6px 15px; background: ${owned ? '#555' : '#f39c12'}; cursor: ${owned ? 'not-allowed' : 'pointer'}" 
+                    onclick="buyWorkshopUpgrade('${cat}', '${type}', ${owned})" ${ (owned || !afford) ? 'disabled' : ''}>
+                    ${btnLabel}
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function buyWorkshopUpgrade(cat, type, alreadyOwned) {
+    if (alreadyOwned) return;
+    const v = getActiveVehicle();
+    if (!v) return;
+
+    const tVal = isNaN(type) ? type : Number(type);
+
+    if (multiplayerMode) {
+        socket.emit('workshopUpgrade', { vehicleId: v.id, category: cat, type: tVal }, (res) => {
+            if (res && res.success) {
+                showToast('Melhoria instalada!', 'success');
+                playSFX('click');
+                renderWorkshopContent();
+            } else {
+                showToast(res ? res.error : 'Erro no servidor', 'error');
+            }
+        });
+    } else {
+        // Solo Mock
+        const res = await apiJson('/workshop/upgrade', {
+            method: 'POST',
+            body: JSON.stringify({ vehicleId: v.id, category: cat, type: tVal })
+        });
+        if (res.success) {
+            showToast(res.msg || 'Melhoria instalada!', 'success');
+            playSFX('click');
+            await fetchState();
+            renderWorkshopContent();
+            if (typeof updateDashboard === 'function') updateDashboard();
+        } else {
+            showToast(res.error || 'Erro ao comprar', 'error');
+        }
+    }
+}
+
+async function repairVehicle() {
+    const v = getActiveVehicle();
+    if (!v) return;
+
+    if (multiplayerMode) {
+        socket.emit('workshopRepair', { vehicleId: v.id }, async (res) => {
+            if (res && res.success) {
+                showToast('Veículo reparado!', 'success');
+                await fetchState();
+                renderWorkshopContent();
+            } else {
+                showToast(res.error, 'error');
+            }
+        });
+    } else {
+        const res = await apiJson('/workshop/repair', {
+            method: 'POST',
+            body: JSON.stringify({ vehicleId: v.id })
+        });
+        if (res.success) {
+            showToast('Veículo reparado!', 'success');
+            await fetchState();
+            renderWorkshopContent();
+        } else {
+            showToast(res.error, 'error');
+        }
+    }
+}
+
 async function doContextAction() {
     if (!lastState) return;
     const ent = getEntity();
 
     // Shop
     if (near(ent, SHOP_POS, 100)) { playSFX('click'); openShop(); return; }
+    
+    // Workshop
+    if (near(ent, WORKSHOP_POS, 120)) {
+        const v = getActiveVehicle();
+        if (v && Math.abs(v.velocity) < 0.1) {
+            playSFX('click'); openWorkshop();
+        } else if (v) {
+            showToast('Pare o veículo para entrar na oficina!', 'warning');
+        }
+        return;
+    }
     // Harvester + silo
     if (isInHarvester() && near(ent, SILO_POS, 80)) {
         try { const d = await apiJson('/action/unload', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
@@ -3915,6 +4324,52 @@ function updateDashboard() {
     document.getElementById('lamp-engine').classList.toggle('active', veh.engineOn);
     document.getElementById('lamp-brake').classList.toggle('active', veh.isBraking);
     document.getElementById('lamp-stall').classList.toggle('active', veh.isEngineStalling);
+
+    // Novo: Dashboard Extra (Turbo e Condição)
+    const turboCont = document.getElementById('dash-turbo-container');
+    const m = getVehicleModel(veh);
+    const hasTurbo = (veh.upgrades?.turboLevel >= 1 || (m && m.gears === 6));
+    
+    if (hasTurbo) {
+        if (turboCont) turboCont.style.display = 'block';
+        
+        // Nível 1 (fábrica 6 marchas) = 0.5 BAR | Nível 2 (Upgrade) = 1.0 BAR
+        const currentLevel = (veh.upgrades?.turboLevel >= 2) ? 2 : 1; 
+        const barLimit = currentLevel === 1 ? 0.5 : 1.0;
+        
+        // Valor final em BAR
+        const boostVal = (veh.turboBoost || 0) * barLimit;
+        
+        const turboPath = document.getElementById('dash-turbo-path');
+        const turboValText = document.getElementById('dash-turbo-val');
+        
+        if (turboPath && turboValText) {
+            // O círculo completo representa 1.0 BAR sempre
+            const offset = 263.8 - (263.8 * (boostVal / 1.0));
+            turboPath.style.strokeDashoffset = offset;
+            turboValText.innerText = boostVal.toFixed(1);
+            
+            if (boostVal > 0.8) turboPath.style.stroke = '#ef4444';
+            else if (boostVal > 0.4) turboPath.style.stroke = '#f59e0b';
+            else turboPath.style.stroke = '#38bdf8';
+        }
+    } else if (turboCont) {
+        turboCont.style.display = 'none';
+    }
+
+    // Condição do veículo (Engine/Tires)
+    const condEng = document.getElementById('dash-cond-engine');
+    const condTire = document.getElementById('dash-cond-tires');
+    if (condEng) {
+        const engP = (veh.condition?.engine || 1.0) * 100;
+        condEng.style.width = engP + '%';
+        condEng.style.background = engP < 30 ? '#e74c3c' : (engP < 60 ? '#f1c40f' : '#2ecc71');
+    }
+    if (condTire) {
+        const tireP = (veh.condition?.tires || 1.0) * 100;
+        condTire.style.width = tireP + '%';
+        condTire.style.background = tireP < 30 ? '#e74c3c' : (tireP < 60 ? '#f1c40f' : '#2ecc71');
+    }
 }
 
 function refreshGearHUD() {
@@ -3965,9 +4420,6 @@ function refreshStatusHUD() {
     el.innerHTML = `Motor: <b>${engineStatus}</b> | ${attachmentStatus} | ${clutchStatus}`;
 }
 
-// ============================================================
-//  FIELD RENDERING
-// ============================================================
 function renderLandZones() {
     if (!landBordersGfx || !catalog || !lastState) return;
     landBordersGfx.clear();
