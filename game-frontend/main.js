@@ -6,7 +6,7 @@ window.addEventListener('load', () => {
 });
 
 function checkVersion() {
-    // Agora configurado para aparecer toda vez que entrar no site
+
     showUpdate();
 }
 
@@ -338,7 +338,14 @@ function handleLocalApi(path, options = {}) {
             const item = LOCAL_CATALOG.vehicles[itemId];
             if (!item || state.farm.money < item.price) return { success: false, message: 'Compra indisponivel' };
             state.farm.money -= item.price;
-            const vehicle = { id: `veh_${localCounters.vehicle++}`, modelId: itemId, isOn: false, fuel: item.fuelCapacity || 100 };
+            const vehicle = {
+                id: `veh_${localCounters.vehicle++}`,
+                modelId: itemId,
+                isOn: false,
+                fuel: item.fuelCapacity || 100,
+                upgrades: { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: !!item.autoDrive, hasMonitor: false, hasAutoTrans: false },
+                condition: { engine: 1.0, tires: 1.0 }
+            };
             inventory.vehicles.push(vehicle);
             normalizeState(state);
             return { success: true, item: vehicle };
@@ -427,19 +434,19 @@ function handleLocalApi(path, options = {}) {
         let cost = 0;
         if (category === 'motor') {
             if (type === 1) cost = 500;
-            else if (type === 2) cost = 2000; 
+            else if (type === 2) cost = 2000;
             else if (type === 3) cost = 5000;
         } else if (category === 'turbo') {
             const currentLvl = veh.upgrades.turboLevel || 0;
             if (currentLvl >= 2) return { success: false, error: 'Turbo já está no máximo!' };
-            
+
             // Lógica igual ao servidor: 6 marchas pulam do 0 pro 2 se for o caso, ou apenas incrementa
             const is6G = (m.gears === 6);
             const nextLvl = (is6G && currentLvl === 0) ? 2 : (currentLvl + 1);
-            
+
             cost = nextLvl === 1 ? 3500 : 2000;
             if (lastState.farm.money < cost) return { success: false, error: 'Dinheiro insuficiente' };
-            
+
             lastState.farm.money -= cost;
             veh.upgrades.turboLevel = nextLvl;
             return { success: true, msg: nextLvl === 2 ? 'Turbo Stage 2 Instalado!' : 'Turbo Stage 1 Instalado!' };
@@ -558,6 +565,19 @@ function handleLocalApi(path, options = {}) {
         return { success: true, loaded: amount };
     }
 
+    if (path === '/action/truck/load-harvester' && method === 'POST') {
+        if (state.farm.harvesterStorage <= 0) return { success: false };
+        if (state.farm.truckCargoType && state.farm.truckCargoType !== 'crops') return { success: false };
+        const space = state.farm.truckCapacity - state.farm.truckStorage;
+        if (space <= 0) return { success: false };
+        const amount = Math.min(1, state.farm.harvesterStorage, space);
+        state.farm.harvesterStorage -= amount;
+        state.farm.truckStorage += amount;
+        state.farm.truckCargoType = 'crops';
+        normalizeState(state);
+        return { success: true, transferred: amount };
+    }
+
     if (path === '/action/truck/load-depot' && method === 'POST') {
         if (state.farm.seedDepot <= 0) return { success: false };
         if (state.farm.truckCargoType && state.farm.truckCargoType !== 'seeds') return { success: false };
@@ -569,6 +589,16 @@ function handleLocalApi(path, options = {}) {
         state.farm.truckCargoType = 'seeds';
         normalizeState(state);
         return { success: true, loaded: amount };
+    }
+
+    if (path === '/action/truck/sell' && method === 'POST') {
+        if (state.farm.truckCargoType !== 'crops' || state.farm.truckStorage <= 0) return { success: false };
+        const profit = state.farm.truckStorage * state.economy.pricePerCrop;
+        state.farm.money += profit;
+        state.farm.truckStorage = 0;
+        state.farm.truckCargoType = null;
+        normalizeState(state);
+        return { success: true, profit };
     }
 
     if (path === '/shop/sell-crops' && method === 'POST') {
@@ -677,6 +707,13 @@ const SELL_POS = { x: 6016, y: 5760 };
 const GAS_STATION_POS = { x: 6528, y: 5760 };
 const IMPL_BARN_START = { x: 3968, y: 5824 };
 const SHOP_PARKING_START = { x: 5504, y: 5824 };
+const INTERACTION_HINT_DELAY = 3300;
+const TRUCK_HARVEST_TRANSFER_RADIUS = 100;
+const TRUCK_HARVEST_TRANSFER_INTERVAL = 160;
+const TRUCK_FOLLOW_SIDE_OFFSET = 86;
+const TRUCK_FOLLOW_REAR_OFFSET = 12;
+let interactionHintKey = null;
+let interactionHintSince = 0;
 let sfx = {}; // Sound effects registry
 let masterVolume = 0.5;
 let engineSound = null;
@@ -787,7 +824,7 @@ function create() {
     this.add.sprite(WORKSHOP_POS.x, WORKSHOP_POS.y, 'shop_bld').setDepth(1).setTint(0xff9900);
     this.add.sprite(SELL_POS.x, SELL_POS.y, 'sell_bld').setDepth(1);
     this.add.sprite(GAS_STATION_POS.x, GAS_STATION_POS.y, 'gas_station').setDepth(1);
-    
+
     const ls = { font: '11px Courier New', fill: '#fff', backgroundColor: '#000a' };
     this.add.text(SILO_POS.x - 14, SILO_POS.y - 52, 'SILO', ls).setDepth(5);
     this.add.text(SHOP_POS.x - 14, SHOP_POS.y - 52, 'LOJA', ls).setDepth(5);
@@ -847,10 +884,10 @@ function create() {
     keys.left.on('down', () => cycleVehicles(-1, this));
     keys.right.on('down', () => cycleVehicles(1, this));
     keys.m.on('down', toggleFullMap);
-    keys.n.on('down', () => { 
+    keys.n.on('down', () => {
         const v = getActiveVehicle();
         if (v?.upgrades?.hasMonitor || getVehicleModel(v)?.autoDrive) {
-            monitorVisible = !monitorVisible; 
+            monitorVisible = !monitorVisible;
         } else {
             showToast('Requer Monitor de Campo', 'warning');
         }
@@ -925,6 +962,61 @@ function showToast(message, tone = 'success') {
     toastTimer = setTimeout(() => {
         el.classList.remove('show', 'success', 'warning', 'error');
     }, 1900);
+}
+
+function hideInteractionHint() {
+    const el = document.getElementById('interaction-hint');
+    if (el) el.classList.remove('show');
+    interactionHintKey = null;
+    interactionHintSince = 0;
+}
+
+function getInteractionCandidate() {
+    if (!lastState || shopOpen) return null;
+    const ent = getEntity();
+    const veh = getActiveVehicle();
+
+    if (near(ent, SHOP_POS, 100)) return { key: 'shop' };
+    if (near(ent, WORKSHOP_POS, 120)) return { key: 'workshop' };
+    if (veh && near(ent, GAS_STATION_POS, 130)) return { key: 'gas' };
+    if (isInHarvester() && near(ent, SILO_POS, 80)) return { key: 'harvester-silo' };
+    if (isInTruck() && near(ent, SILO_POS, 80)) return { key: 'truck-silo' };
+    if (isInTruck() && near(ent, HOUSE_POS, 100)) return { key: 'truck-house' };
+    if (isInTruck() && near(ent, SELL_POS, 100)) return { key: 'truck-sell' };
+
+    if (veh?.type === 'truck') {
+        const harvestTarget = getNearestActiveHarvesterForTruck(veh, TRUCK_HARVEST_TRANSFER_RADIUS);
+        if (harvestTarget) return { key: `truck-harvester-${harvestTarget.id}` };
+
+        const seedTarget = implementSprites.find(impl => impl.type === 'seeder' && near(ent, impl.sprite, 80));
+        if (seedTarget) return { key: `truck-seeder-${seedTarget.id}` };
+    }
+
+    return null;
+}
+
+function updateInteractionHint() {
+    const el = document.getElementById('interaction-hint');
+    if (!el) return;
+
+    const candidate = getInteractionCandidate();
+    const now = Date.now();
+    if (!candidate) {
+        hideInteractionHint();
+        return;
+    }
+
+    if (candidate.key !== interactionHintKey) {
+        interactionHintKey = candidate.key;
+        interactionHintSince = now;
+        el.classList.remove('show');
+        return;
+    }
+
+    if (now - interactionHintSince >= INTERACTION_HINT_DELAY) {
+        el.textContent = 'Aperte Q para interagir';
+        el.classList.add('show');
+    }
 }
 
 function normalizeAngle(angle) {
@@ -1284,6 +1376,12 @@ function canAutoDriveNow(veh) {
 
 function getAutoDriveStatus(veh) {
     if (!veh) return 'OFF';
+    if (veh.autoDriveState?.mode === 'truckFollow') return (veh.autoDriveState.status || 'following').toUpperCase();
+    if (veh.type === 'truck') {
+        const model = getVehicleModel(veh);
+        if (!(model?.autoDrive || veh.upgrades?.hasAutoDrive)) return 'OFF';
+        return getNearestActiveHarvesterForTruck(veh) ? 'READY' : 'OFF';
+    }
     if (veh.autoDriveEnabled) return veh.autoDriveState?.status?.toUpperCase() || 'ACTIVE';
     const readyCheck = canAutoDriveNow(veh);
     return readyCheck.ok ? 'READY' : 'OFF';
@@ -1542,6 +1640,229 @@ function updateAutoDriveProgress(veh) {
         state.slowFrames = 0;
     }
 
+}
+
+function isHarvesterActiveForTruck(harvester) {
+    return !!(harvester && harvester.type === 'harvester' && harvester.engineOn && (harvester.toolOn || harvester.autoDriveEnabled));
+}
+
+function getNearestActiveHarvesterForTruck(truck, maxDistance = Infinity) {
+    if (!truck) return null;
+    let best = null;
+    let bestDist = maxDistance;
+
+    vehicleSprites.forEach(candidate => {
+        if (candidate.id === truck.id || !isHarvesterActiveForTruck(candidate)) return;
+        const dist = Phaser.Math.Distance.Between(truck.sprite.x, truck.sprite.y, candidate.sprite.x, candidate.sprite.y);
+        if (dist < bestDist) {
+            best = candidate;
+            bestDist = dist;
+        }
+    });
+
+    return best;
+}
+
+function getTruckCropSpace(truck) {
+    if (!lastState?.farm || !truck) return 0;
+    if (lastState.farm.truckCargoType && lastState.farm.truckCargoType !== 'crops') return 0;
+    const model = getVehicleModel(truck);
+    const capacity = model?.capacity || lastState.farm.truckCapacity || 30;
+    return Math.max(0, capacity - (lastState.farm.truckStorage || 0));
+}
+
+function syncLocalFarmStorageFromAuthoritative() {
+    if (multiplayerMode || !localState || !lastState?.farm) return;
+    lastState.farm.harvesterStorage = localState.farm.harvesterStorage;
+    lastState.farm.truckStorage = localState.farm.truckStorage;
+    lastState.farm.truckCargoType = localState.farm.truckCargoType;
+    lastState.farm.harvestedCrops = localState.farm.harvestedCrops;
+}
+
+function maybeShowTransferToast(message, tone = 'success') {
+    const now = Date.now();
+    if (now - (window.lastHarvestTransferToast || 0) < 1200) return;
+    window.lastHarvestTransferToast = now;
+    showToast(message, tone);
+}
+
+function transferHarvestToTruck(truck, harvester, automatic = false) {
+    if (!lastState?.farm || !truck || !harvester) return false;
+    if (truck.type !== 'truck' || !isHarvesterActiveForTruck(harvester)) return false;
+    if (!near(truck.sprite, harvester.sprite, TRUCK_HARVEST_TRANSFER_RADIUS)) return false;
+
+    if (multiplayerMode && socket && socket.connected) {
+        if (truck.driverId && truck.driverId !== socket.id) return false;
+        const now = Date.now();
+        if (now - (truck._lastHarvestTransferReq || 0) < TRUCK_HARVEST_TRANSFER_INTERVAL) return true;
+        truck._lastHarvestTransferReq = now;
+        socket.emit('actionHarvesterToTruck', {
+            truckId: truck.id,
+            harvesterId: harvester.id,
+            amount: 1,
+            automatic
+        }, (res) => {
+            if (res?.success) {
+                maybeShowTransferToast(automatic ? 'Carregamento automatico ativo' : 'Transferindo colheita');
+            } else if (res?.error && !automatic) {
+                maybeShowTransferToast(res.error, 'warning');
+            }
+        });
+        return true;
+    }
+
+    const state = ensureLocalState();
+    const farm = state.farm;
+    const now = Date.now();
+    if (now - (truck._lastLocalHarvestTransfer || 0) < TRUCK_HARVEST_TRANSFER_INTERVAL) return true;
+    truck._lastLocalHarvestTransfer = now;
+    if (farm.harvesterStorage <= 0) return false;
+    if (farm.truckCargoType && farm.truckCargoType !== 'crops') {
+        if (!automatic) maybeShowTransferToast('Caminhao carregado com sementes', 'warning');
+        return false;
+    }
+
+    const model = getVehicleModel(truck);
+    const capacity = model?.capacity || farm.truckCapacity || 30;
+    const space = Math.max(0, capacity - (farm.truckStorage || 0));
+    if (space <= 0) {
+        if (!automatic) maybeShowTransferToast('Caminhao cheio', 'warning');
+        return false;
+    }
+
+    const amount = Math.min(1, farm.harvesterStorage, space);
+    farm.harvesterStorage -= amount;
+    farm.truckStorage = (farm.truckStorage || 0) + amount;
+    farm.truckCargoType = 'crops';
+    normalizeState(state);
+    syncLocalFarmStorageFromAuthoritative();
+    updateHUD(lastState);
+    updateDashboard();
+    maybeShowTransferToast(automatic ? 'Carregamento automatico ativo' : 'Transferindo colheita');
+    return true;
+}
+
+function getTruckFollowTarget(truck, harvester) {
+    const heading = harvester.angle ?? harvester.sprite.rotation ?? 0;
+    const sideX = -Math.sin(heading);
+    const sideY = Math.cos(heading);
+    const rearX = -Math.cos(heading);
+    const rearY = -Math.sin(heading);
+
+    if (!truck.autoDriveState.sideSign) {
+        const dx = truck.sprite.x - harvester.sprite.x;
+        const dy = truck.sprite.y - harvester.sprite.y;
+        truck.autoDriveState.sideSign = (dx * sideX + dy * sideY) >= 0 ? 1 : -1;
+    }
+
+    return {
+        x: harvester.sprite.x + sideX * truck.autoDriveState.sideSign * TRUCK_FOLLOW_SIDE_OFFSET + rearX * TRUCK_FOLLOW_REAR_OFFSET,
+        y: harvester.sprite.y + sideY * truck.autoDriveState.sideSign * TRUCK_FOLLOW_SIDE_OFFSET + rearY * TRUCK_FOLLOW_REAR_OFFSET
+    };
+}
+
+function activateTruckFollowAutoDrive(truck) {
+    if (!truck) return false;
+    if (!truck.engineOn) {
+        showToast('Ligue o motor para ativar o AUTO DRIVE', 'warning');
+        return false;
+    }
+
+    const harvester = getNearestActiveHarvesterForTruck(truck);
+    if (!harvester) {
+        showToast('Nenhuma colheitadeira ativa encontrada', 'warning');
+        return false;
+    }
+
+    if (truck.gear < 1) truck.gear = 1;
+    truck.autoDriveEnabled = true;
+    truck.autoDriveState = {
+        mode: 'truckFollow',
+        status: 'following',
+        targetVehicleId: harvester.id,
+        sideSign: 0,
+        activeTime: 0,
+        lastPosition: { x: truck.sprite.x, y: truck.sprite.y }
+    };
+    refreshStatusHUD();
+    showToast('AUTO DRIVE: acompanhando colheitadeira', 'success');
+    return true;
+}
+
+function runTruckFollowAutoDrive(truck, delta = 16.66) {
+    const model = getVehicleModel(truck);
+    const state = truck.autoDriveState;
+    if (!model || !state) {
+        disableAutoDrive(truck, 'AUTO DRIVE: OFF - erro critico', 'error');
+        return;
+    }
+
+    if (!truck.engineOn) {
+        disableAutoDrive(truck, 'AUTO DRIVE: OFF - motor desligado', 'warning');
+        return;
+    }
+
+    let harvester = vehicleSprites.find(v => v.id === state.targetVehicleId);
+    if (!isHarvesterActiveForTruck(harvester)) {
+        harvester = getNearestActiveHarvesterForTruck(truck);
+        if (!harvester) {
+            disableAutoDrive(truck, 'AUTO DRIVE: OFF - sem colheitadeira ativa', 'warning');
+            return;
+        }
+        state.targetVehicleId = harvester.id;
+        state.sideSign = 0;
+    }
+
+    const target = getTruckFollowTarget(truck, harvester);
+    const dist = Phaser.Math.Distance.Between(truck.sprite.x, truck.sprite.y, target.x, target.y);
+    const targetAngle = Math.atan2(target.y - truck.sprite.y, target.x - truck.sprite.x);
+    if (isFinite(targetAngle)) {
+        truck.angle = rotateAngleToward(truck.angle, targetAngle, (model.turnSpeedBase || 0.05) * 1.8);
+        truck.angle = normalizeAngle(truck.angle);
+    }
+
+    const frameMult = (delta / 1000) * 60;
+    const ratios = model.gears === 6 ? RATIOS_6 : RATIOS_4;
+    const gearMaxSpeed = model.speed * (ratios[truck.gear] || 0.25);
+    const followSpeed = Math.min(gearMaxSpeed * 0.75, Math.max(0, dist * 0.025));
+    const desiredSpeed = dist < 18 ? Math.min(Math.abs(harvester.velocity || 0), gearMaxSpeed * 0.45) : followSpeed;
+    const accel = (model.acceleration || 0.08) * 0.22 * frameMult;
+
+    if (truck.velocity < desiredSpeed) truck.velocity = Math.min(desiredSpeed, truck.velocity + accel);
+    else truck.velocity = Math.max(desiredSpeed, truck.velocity - accel * 1.4);
+    if (dist < 8) truck.velocity *= 0.6;
+
+    const vx = Math.cos(truck.angle) * truck.velocity;
+    const vy = Math.sin(truck.angle) * truck.velocity;
+    const nextX = Phaser.Math.Clamp(truck.sprite.x + vx, TILE, W - TILE);
+    const nextY = Phaser.Math.Clamp(truck.sprite.y + vy, TILE, H - TILE);
+
+    if (isBlockedPosition(nextX, nextY, 20)) {
+        truck.autoDriveState.sideSign *= -1;
+        truck.velocity *= 0.25;
+    } else {
+        truck.sprite.x = nextX;
+        truck.sprite.y = nextY;
+    }
+
+    truck.sprite.rotation = truck.angle;
+    truck.rpm = Phaser.Math.Clamp(Phaser.Math.Linear(truck.rpm, truck.velocity > 0.05 ? 1700 : 900, 0.12), 800, 3000);
+    truck.fuel = Math.max(0, (truck.fuel || 0) - (0.0005 + (truck.rpm / 3000) * 0.0012));
+    if (truck.fuel <= 0) {
+        truck.engineOn = false;
+        disableAutoDrive(truck, 'AUTO DRIVE: OFF - sem combustivel', 'error');
+        return;
+    }
+
+    state.status = near(truck.sprite, harvester.sprite, TRUCK_HARVEST_TRANSFER_RADIUS) ? 'loading' : 'following';
+    state.activeTime = (state.activeTime || 0) + delta / 1000;
+
+    if (getTruckCropSpace(truck) <= 0) {
+        disableAutoDrive(truck, 'AUTO DRIVE: OFF - caminhao cheio', 'success');
+        return;
+    }
+
+    transferHarvestToTruck(truck, harvester, true);
 }
 
 // ========== RECOVERY MODE: FULLY ISOLATED ==========
@@ -1855,6 +2176,11 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
         };
     }
 
+    if (veh.autoDriveEnabled && veh.autoDriveState.mode === 'truckFollow') {
+        runTruckFollowAutoDrive(veh, delta);
+        return;
+    }
+
     // ===== RECOVERY INTERCEPT: ABSOLUTE PRIORITY =====
     if (veh.autoDriveEnabled && veh.autoDriveState.mode === 'recovery') {
         runRecoveryLogic(veh);
@@ -2000,7 +2326,7 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
     // 2️⃣ PERFORMANCE RELATIVA AO PESO BASE
     // Veículo sozinho = 1.0, com implemento = proporcionalmente menor
     const baseWeight = (m.weight || 3000);
-    
+
     // NOVO: Bônus de Motor Upgrade (Aumentado para ser mais perceptível)
     let engineBonus = 0;
     if (veh.upgrades?.engineLevel === 2) engineBonus = 0.35; // +35%
@@ -2043,6 +2369,28 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
     const dtSec = delta / 1000;
     const frameMult = dtSec * 60; // 1 at 60fps
 
+    // 4.5️⃣ TURBO BOOST GLOBAL (Independente de estar engatado/andando)
+    let maxTurboLevel = veh.upgrades?.turboLevel || 0;
+    if (m.gears === 6 && maxTurboLevel < 1) maxTurboLevel = 1; // 6 marchas já tem T1
+
+    if (engineOn && maxTurboLevel > 0) {
+        if (veh.turboPressure === undefined) veh.turboPressure = 0;
+
+        // Spool up if throttle is pressed (independente de estar parado)
+        const targetBoost = (throttleForward || throttleReverse) ? 1.0 : 0.0;
+        const spoolRate = targetBoost > veh.turboPressure ? 0.08 : 0.12;
+        veh.turboPressure += (targetBoost - veh.turboPressure) * spoolRate;
+
+        // RPM factor: sincronizado realisticamente com o conta-giros (começa no idle ~800, max ~2800)
+        const rpmFactor = Math.max(0, Math.min(1, (veh.rpm - 800) / 2000));
+        veh.turboBoost = veh.turboPressure * rpmFactor; // Valor real (0 a 1) p/ HUD
+        veh.currentTurboLevel = maxTurboLevel;
+    } else {
+        veh.turboBoost = 0;
+        veh.turboPressure = 0;
+        veh.currentTurboLevel = 0;
+    }
+
     // 5️⃣ ACELERAÇÃO COM SISTEMA REALISTA
     if (engineOn && veh.rpm > 500 && !clutchPressed) {
         // Aceleração base
@@ -2054,30 +2402,11 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
         // Aceleração depende da carga através de finalPower
         let accel = baseAccel * gearMult * finalPower;
 
-        // NOVO: Turbo Boost Realista com Inércia (Spooling) - Corrigido para 4 marchas
-        let maxTurboLevel = veh.upgrades?.turboLevel || 0;
-        if (m.gears === 6 && maxTurboLevel < 1) maxTurboLevel = 1; // 6 marchas já tem T1
-        
+        // Aplica o boost na aceleração real (se o turbo estiver spoolado e engine ligado)
         if (maxTurboLevel > 0) {
-            if (veh.turboPressure === undefined) veh.turboPressure = 0;
-            
-            // Spool up if throttle is pressed
-            const targetBoost = (throttleForward || throttleReverse) ? 1.0 : 0.0;
-            const spoolRate = targetBoost > veh.turboPressure ? 0.08 : 0.12; // Muito mais rápido
-            veh.turboPressure += (targetBoost - veh.turboPressure) * spoolRate;
-            
-            // Força física e BAR dependem da RPM
-            const rpmFactor = Math.max(0, (veh.rpm - 1000) / 2000); // 0.0 a 1.0
-            const boostCap = maxTurboLevel === 1 ? 0.40 : 0.85; 
-            const boost = boostCap * veh.turboPressure * rpmFactor;
-            
+            const boostCap = maxTurboLevel === 1 ? 0.40 : 0.85;
+            const boost = boostCap * veh.turboBoost;
             accel *= (1 + boost);
-            veh.turboBoost = veh.turboPressure * rpmFactor; // Valor real em percentual da BAR máxima
-            veh.currentTurboLevel = maxTurboLevel;
-        } else {
-            veh.turboBoost = 0;
-            veh.turboPressure = 0;
-            veh.currentTurboLevel = 0;
         }
 
         // NOVO: Pneus influenciam aceleração/grip
@@ -2201,7 +2530,7 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
 
         veh.condition.engine -= wearBase * loadWearFactor * rpmWearFactor * turboWearFactor * frameMult;
         veh.condition.tires -= wearBase * (Math.abs(veh.velocity) / 5) * loadWearFactor * frameMult;
-        
+
         veh.condition.engine = Math.max(0, veh.condition.engine);
         veh.condition.tires = Math.max(0, veh.condition.tires);
 
@@ -2264,7 +2593,11 @@ function runVehicleLogic(veh, isControlled, delta = 16.66) {
         // Shifting points ajustados para serem mais sensíveis sob carga
         const upShiftRPM = 2500;
         const downShiftRPM = (veh.gear >= 5) ? 1600 : 1300;
-        if (veh.rpm > upShiftRPM && veh.gear < m.gears) {
+
+        // Só sobe de marcha se estiver com uma velocidade mínima (não parado)
+        const isMoving = Math.abs(veh.velocity) > 0.1;
+
+        if (veh.rpm > upShiftRPM && veh.gear < m.gears && isMoving && !clutchPressed) {
             veh.gear++;
             veh.rpm -= 800; // Simular queda de giro na troca
         } else if (veh.rpm < downShiftRPM && veh.gear > 1) {
@@ -2337,7 +2670,10 @@ function playSFX(key, vol = 1) {
 }
 
 function update(time, delta) {
-    if (shopOpen) return;
+    if (shopOpen) {
+        hideInteractionHint();
+        return;
+    }
     if (!keys) return;
 
     // 1. Update each vehicle independently
@@ -2393,6 +2729,7 @@ function update(time, delta) {
     }
 
     handleContinuousActions();
+    updateInteractionHint();
 
     // 3. Visuals that depend on overall state
     renderMiniMap();
@@ -2525,6 +2862,14 @@ function handleContinuousActions() {
     }
 
     // Transferência Caminhão -> Veículo (Q)
+    if (keys.q.isDown && veh.type === 'truck') {
+        const harvester = getNearestActiveHarvesterForTruck(veh, TRUCK_HARVEST_TRANSFER_RADIUS);
+        if (harvester) {
+            transferHarvestToTruck(veh, harvester, false);
+            return;
+        }
+    }
+
     if (keys.q.isDown && veh.type === 'truck' && veh.fuelTank > 0) {
         for (const target of vehicleSprites) {
             if (target.id === veh.id) continue;
@@ -2756,8 +3101,10 @@ function ensureVehicles() {
         const modelId = veh.modelId;
         const existing = vehicleSprites.find(v => v.id === veh.id);
         if (existing) {
-            existing.upgrades = veh.upgrades;
-            existing.condition = veh.condition;
+            existing.upgrades = veh.upgrades || existing.upgrades;
+            existing.condition = veh.condition || existing.condition;
+            existing.fuel = veh.fuel ?? existing.fuel;
+            existing.fuelTank = existing.type === 'truck' ? (veh.fuelTank ?? existing.fuelTank) : existing.fuelTank;
             return;
         }
         if (!spawnedVehicleIds.has(veh.id)) {
@@ -2784,6 +3131,8 @@ function ensureVehicles() {
                 toolOn: false,
                 fuel: veh.fuel || model.fuelCapacity || 100,
                 fuelTank: model.type === 'truck' ? (veh.fuelTank || model.tankCapacity || 1000) : 0,
+                upgrades: veh.upgrades || { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: !!model.autoDrive, hasMonitor: false, hasAutoTrans: false },
+                condition: veh.condition || { engine: 1.0, tires: 1.0 },
                 // Full physics state per vehicle
                 velocity: 0,
                 rpm: 0,
@@ -2836,6 +3185,12 @@ function ensureImplements() {
     });
 
     implementsArr.forEach(implItem => {
+        const existing = implementSprites.find(i => i.id === implItem.id);
+        if (existing) {
+            existing.seedStorage = implItem.seedStorage ?? existing.seedStorage ?? 0;
+            existing.hitchedTo = implItem.attachedToVehicleId || implItem.hitchedTo || existing.hitchedTo || null;
+            return;
+        }
         if (spawnedImplementIds.has(implItem.id)) return;
         if (!catalog.implements[implItem.modelId]) return;
 
@@ -2849,7 +3204,7 @@ function ensureImplements() {
         }
         const sprite = scene.add.sprite(startX, startY, texKey).setDepth(2).setRotation(implItem.rotation || 1.5708);
 
-        implementSprites.push({ id: implItem.id, modelId: implItem.modelId, type: model.type, sprite, lastX: startX, lastY: startY, isOn: false, hitchedTo: implItem.attachedToVehicleId || implItem.hitchedTo || null });
+        implementSprites.push({ id: implItem.id, modelId: implItem.modelId, type: model.type, sprite, lastX: startX, lastY: startY, isOn: false, seedStorage: implItem.seedStorage || 0, hitchedTo: implItem.attachedToVehicleId || implItem.hitchedTo || null });
         implementPositions[implItem.id] = { x: startX, y: startY };
         spawnedImplementIds.add(implItem.id);
     });
@@ -2967,6 +3322,10 @@ function doToggleAutoWork() {
         console.log("Autodrive desativado");
         return;
     }
+    if (veh?.type === 'truck') {
+        activateTruckFollowAutoDrive(veh);
+        return;
+    }
     if (veh) {
         veh.autoDriveDirection = veh.angle; // Trava o angulo atual
         console.log("Autodrive ativado");
@@ -3080,6 +3439,7 @@ function doToggleHitch() {
             }
         }
     }
+    updateImplementCapacityIndicator();
 }
 
 function doToggleVehicle() {
@@ -3093,6 +3453,7 @@ function doToggleVehicle() {
         }
         activeVehIdx = -1;
         document.getElementById('dashboard').style.display = 'none';
+        updateImplementCapacityIndicator();
         player.setVisible(true);
         refreshStatusHUD();
         refreshGearHUD();
@@ -3145,6 +3506,7 @@ function doToggleVehicle() {
             document.getElementById('dashboard').style.display = 'flex';
             refreshStatusHUD();
             updateDashboard();
+            updateImplementCapacityIndicator();
             refreshGearHUD();
             showToast(`Entrou em: ${m ? m.name : 'Veículo'}`);
         }
@@ -3645,9 +4007,13 @@ function openSellMenu() {
 let workshopOpen = false;
 let currentWorkshopTab = 'motor';
 
-function openWorkshop() {
+async function openWorkshop() {
     const v = getActiveVehicle();
     if (!v) return;
+
+    // Sincronizar estado antes de abrir para evitar bugs de saldo/upgrades
+    await fetchState();
+
     workshopOpen = true;
     shopOpen = true; // Block movement
     document.getElementById('workshop-modal').style.display = 'flex';
@@ -3722,8 +4088,10 @@ function renderWorkshopContent() {
         });
     } else if (currentWorkshopTab === 'turbo') {
         let currentLevel = up.turboLevel || 0;
-        if (m.gears === 6 && currentLevel < 1) currentLevel = 1;
-        
+
+        // Veículos de 6 marchas já vêm com Turbo Stage 1 (0.5 BAR) de fábrica
+        if (m.gears === 6 && currentLevel === 0) currentLevel = 1;
+
         if (currentLevel === 0) {
             html += renderWSItem('turbo', 1, '🐌', 'Kit Turbo Stage 1', 'Instalação de turbo para 0.5 BAR', 3500, false);
         } else if (currentLevel === 1) {
@@ -3747,10 +4115,14 @@ function renderWorkshopContent() {
         const hasMon = up.hasMonitor;
         const hasAT = up.hasAutoTrans || m.gearType === 'auto';
 
+        if (m.type === 'truck') {
+            html += renderWSItem('systems', 'autodrive', '[AD]', 'Modulo AutoDrive', 'Acompanha colheitadeiras em carga', 2500, hasAD);
+            html += renderWSItem('systems', 'monitor', '[MON]', 'Monitor de Campo', 'Dados avancados no painel', 1500, hasMon);
+        }
         if (m.type !== 'truck') {
             html += renderWSItem('systems', 'autodrive', '🤖', 'Módulo AutoDrive', 'Piloto automático de trabalho', 2500, hasAD);
+            html += renderWSItem('systems', 'monitor', '🖥️', 'Monitor de Campo', 'Dados avançados no painel', 1500, hasMon);
         }
-        html += renderWSItem('systems', 'monitor', '🖥️', 'Monitor de Campo', 'Dados avançados no painel', 1500, hasMon);
         html += renderWSItem('systems', 'autotrans', '⚙️', 'Transmissão Automática', 'Conversão para câmbio automático', 3000, hasAT);
     }
 
@@ -3784,9 +4156,9 @@ function renderWSItem(cat, type, icon, name, desc, price, owned, customText = nu
                 <div style="font-size: 11px; color: #94a3b8;">${desc}</div>
             </div>
             <div style="text-align: right;">
-                <div style="font-weight: bold; color: #2ecc71; margin-bottom: 5px;">${owned ? 'Instalado' : '$'+price.toLocaleString()}</div>
+                <div style="font-weight: bold; color: #2ecc71; margin-bottom: 5px;">${owned ? 'Instalado' : '$' + price.toLocaleString()}</div>
                 <button class="buy-btn" style="width: auto; padding: 6px 15px; background: ${owned ? '#555' : '#f39c12'}; cursor: ${owned ? 'not-allowed' : 'pointer'}" 
-                    onclick="buyWorkshopUpgrade('${cat}', '${type}', ${owned})" ${ (owned || !afford) ? 'disabled' : ''}>
+                    onclick="buyWorkshopUpgrade('${cat}', '${type}', ${owned})" ${(owned || !afford) ? 'disabled' : ''}>
                     ${btnLabel}
                 </button>
             </div>
@@ -3864,7 +4236,7 @@ async function doContextAction() {
 
     // Shop
     if (near(ent, SHOP_POS, 100)) { playSFX('click'); openShop(); return; }
-    
+
     // Workshop
     if (near(ent, WORKSHOP_POS, 120)) {
         const v = getActiveVehicle();
@@ -3875,27 +4247,51 @@ async function doContextAction() {
         }
         return;
     }
+    // Gas station
+    if (getActiveVehicle() && near(ent, GAS_STATION_POS, 130)) {
+        await doRefuel();
+        return;
+    }
+    // Truck + active harvester
+    if (isInTruck()) {
+        const truck = getActiveVehicle();
+        const harvester = getNearestActiveHarvesterForTruck(truck, TRUCK_HARVEST_TRANSFER_RADIUS);
+        if (harvester) {
+            transferHarvestToTruck(truck, harvester, false);
+            return;
+        }
+    }
     // Harvester + silo
     if (isInHarvester() && near(ent, SILO_POS, 80)) {
-        try { const d = await apiJson('/action/unload', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
+        if (multiplayerMode && socket?.connected) socket.emit('actionUnload');
+        else try { const d = await apiJson('/action/unload', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { }
+        return;
     }
     // Truck + silo
     if (isInTruck() && near(ent, SILO_POS, 80)) {
-        try { const d = await apiJson('/action/truck/load-silo', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
+        if (multiplayerMode && socket?.connected) socket.emit('actionTruckLoadSilo');
+        else try { const d = await apiJson('/action/truck/load-silo', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { }
+        return;
     }
     // Truck + house (load seeds from depot)
     if (isInTruck() && near(ent, HOUSE_POS, 100)) {
-        try { const d = await apiJson('/action/truck/load-depot', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
+        if (multiplayerMode && socket?.connected) socket.emit('actionTruckLoadDepot');
+        else try { const d = await apiJson('/action/truck/load-depot', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { }
+        return;
     }
     // Truck + sell
     if (isInTruck() && near(ent, SELL_POS, 100)) {
-        try { const d = await apiJson('/action/truck/sell', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
+        if (multiplayerMode && socket?.connected) socket.emit('actionTruckSell');
+        else try { const d = await apiJson('/action/truck/sell', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { }
+        return;
     }
     // Truck + seeder (transfer seeds)
     if (isInTruck()) {
         for (const impl of implementSprites) {
             if (impl.type === 'seeder' && near(ent, impl.sprite, 80)) {
-                try { const d = await apiJson('/action/truck/transfer-seeds', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { } return;
+                if (multiplayerMode && socket?.connected) socket.emit('actionTruckTransferSeeds', { implementId: impl.id });
+                else try { const d = await apiJson('/action/truck/transfer-seeds', { method: 'POST' }); if (d.success) await fetchState(); } catch (e) { }
+                return;
             }
         }
     }
@@ -4263,27 +4659,124 @@ async function doRefuel() {
 // ============================================================
 //  HUD
 // ============================================================
+function hasVehicleMonitor(veh) {
+    const model = getVehicleModel(veh);
+    return !!(veh?.upgrades?.hasMonitor || model?.autoDrive);
+}
+
+function getCapacityColor(current, capacity) {
+    const safeCapacity = Math.max(1, Number(capacity) || 1);
+    const pct = Phaser.Math.Clamp((Number(current) || 0) / safeCapacity * 100, 0, 100);
+    if (pct <= 0) return '#000000';
+    if (pct <= 20) return '#ef4444';
+    if (pct <= 40) return '#f97316';
+    if (pct <= 60) return '#facc15';
+    if (pct <= 80) return '#22c55e';
+    return '#166534';
+}
+
+function getHitchedSeeder(veh) {
+    if (!veh || veh.type !== 'tractor') return null;
+    const impl = implementSprites.find(i => i.hitchedTo === veh.id);
+    if (!impl || impl.type !== 'seeder') return null;
+    return impl;
+}
+
+function getSeederStorage(impl) {
+    if (multiplayerMode && typeof impl?.seedStorage === 'number') return impl.seedStorage;
+    return lastState?.farm?.seederStorage || 0;
+}
+
+function getActiveCapacityInfo() {
+    const veh = getActiveVehicle();
+    if (!veh || !lastState?.farm) return null;
+
+    if (veh.type === 'truck') {
+        const model = getVehicleModel(veh);
+        return {
+            name: 'Caminhao',
+            current: lastState.farm.truckStorage || 0,
+            capacity: model?.capacity || lastState.farm.truckCapacity || 30,
+            hasMonitor: hasVehicleMonitor(veh)
+        };
+    }
+
+    if (veh.type === 'harvester') {
+        const model = getVehicleModel(veh);
+        return {
+            name: 'Colheitadeira',
+            current: lastState.farm.harvesterStorage || 0,
+            capacity: model?.capacity || lastState.farm.harvesterCapacity || 50,
+            hasMonitor: hasVehicleMonitor(veh)
+        };
+    }
+
+    const seeder = getHitchedSeeder(veh);
+    if (seeder) {
+        const model = catalog?.implements?.[seeder.modelId];
+        return {
+            name: model?.name || 'Plantadeira',
+            current: getSeederStorage(seeder),
+            capacity: model?.capacity || lastState.farm.seederCapacity || 20,
+            hasMonitor: hasVehicleMonitor(veh)
+        };
+    }
+
+    return null;
+}
+
+function updateImplementCapacityIndicator() {
+    const box = document.getElementById('implement-capacity');
+    if (!box) return;
+    const fill = document.getElementById('implement-capacity-fill');
+    const nameEl = document.getElementById('implement-capacity-name');
+    const valuesEl = document.getElementById('implement-capacity-values');
+    const info = getActiveCapacityInfo();
+
+    if (!info) {
+        box.style.display = 'none';
+        return;
+    }
+
+    const capacity = Math.max(1, Number(info.capacity) || 1);
+    const current = Math.max(0, Number(info.current) || 0);
+    const pct = Phaser.Math.Clamp((current / capacity) * 100, 0, 100);
+    const fillWidth = current > 0 ? Math.max(4, pct) : 0;
+
+    box.style.display = 'block';
+    box.classList.toggle('no-monitor', !info.hasMonitor);
+    if (nameEl) nameEl.textContent = info.name;
+    if (valuesEl) valuesEl.textContent = `${Math.floor(current)}/${capacity} (${Math.round(pct)}%)`;
+    if (fill) {
+        fill.style.width = `${fillWidth}%`;
+        fill.style.backgroundColor = getCapacityColor(current, capacity);
+    }
+}
+
 function updateHUD(s) {
     const $ = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
     $('ui-money', s.farm.money);
     $('ui-depot', s.farm.seedDepot);
-    $('ui-seeder', s.farm.seederStorage + '/' + s.farm.seederCapacity);
-    $('ui-harvester', s.farm.harvesterStorage + '/' + s.farm.harvesterCapacity);
-    $('ui-truck', (s.farm.truckStorage || 0) + '/' + (s.farm.truckCapacity || 30) + (s.farm.truckCargoType ? (s.farm.truckCargoType === 'seeds' ? ' 🌱' : ' 🌾') : ''));
     $('ui-silo', s.farm.harvestedCrops);
     $('ui-weather', s.weather);
     $('ui-price', s.economy.pricePerCrop);
     $('ui-time', s.time);
     $('ui-hour', currentHour.toString().padStart(2, '0'));
+    updateImplementCapacityIndicator();
     refreshStatusHUD();
 }
 
 function updateDashboard() {
     const d = document.getElementById('dashboard');
-    if (!d || activeVehIdx < 0) return;
+    if (!d) return;
+    if (activeVehIdx < 0) {
+        updateImplementCapacityIndicator();
+        return;
+    }
 
     const veh = getActiveVehicle();
     if (!veh) return;
+    updateImplementCapacityIndicator();
 
     const speed = Math.max(0, Math.round(Math.abs(veh.velocity) * 10));
     document.getElementById('dash-speed').innerText = isFinite(speed) ? speed : 0;
@@ -4327,26 +4820,26 @@ function updateDashboard() {
     const turboCont = document.getElementById('dash-turbo-container');
     const m = getVehicleModel(veh);
     const hasTurbo = (veh.upgrades?.turboLevel >= 1 || (m && m.gears === 6));
-    
+
     if (hasTurbo) {
         if (turboCont) turboCont.style.display = 'block';
-        
+
         // Nível 1 (fábrica 6 marchas) = 0.5 BAR | Nível 2 (Upgrade) = 1.0 BAR
-        const currentLevel = (veh.upgrades?.turboLevel >= 2) ? 2 : 1; 
+        const currentLevel = (veh.upgrades?.turboLevel >= 2) ? 2 : 1;
         const barLimit = currentLevel === 1 ? 0.5 : 1.0;
-        
+
         // Valor final em BAR
         const boostVal = (veh.turboBoost || 0) * barLimit;
-        
+
         const turboPath = document.getElementById('dash-turbo-path');
         const turboValText = document.getElementById('dash-turbo-val');
-        
+
         if (turboPath && turboValText) {
             // O círculo completo representa 1.0 BAR sempre
             const offset = 263.8 - (263.8 * (boostVal / 1.0));
             turboPath.style.strokeDashoffset = offset;
             turboValText.innerText = boostVal.toFixed(1);
-            
+
             if (boostVal > 0.8) turboPath.style.stroke = '#ef4444';
             else if (boostVal > 0.4) turboPath.style.stroke = '#f59e0b';
             else turboPath.style.stroke = '#38bdf8';
@@ -4414,6 +4907,8 @@ function refreshStatusHUD() {
         } else {
             attachmentStatus = `<span style="color:${hImpl.isOn ? '#2ecc71' : '#e74c3c'}">Acoplado: ${catalog.implements[hImpl.modelId].name} ${hImpl.isOn ? 'ON' : 'OFF'}</span>`;
         }
+    } else if (veh.type === 'truck' && veh.autoDriveState?.mode === 'truckFollow') {
+        attachmentStatus = `<span style="color:${veh.autoDriveEnabled ? '#2ecc71' : '#95a5a6'}">AutoDrive: ${getAutoDriveStatus(veh)}</span>`;
     }
     el.innerHTML = `Motor: <b>${engineStatus}</b> | ${attachmentStatus} | ${clutchStatus}`;
 }
@@ -5158,6 +5653,7 @@ function initMultiplayer() {
         const imp = implementSprites.find(i => i.id === id);
         if (imp) {
             imp.seedStorage = seedStorage;
+            updateImplementCapacityIndicator();
         }
     });
 
@@ -5349,7 +5845,7 @@ function initMultiplayer() {
             }
 
             // Force HUD refresh for passengers
-            if (idx === activeVehIdx) {
+            if (vehicleSprites.indexOf(veh) === activeVehIdx) {
                 updateDashboard();
                 refreshStatusHUD();
                 refreshGearHUD();

@@ -113,6 +113,10 @@ app.get('/shop/catalog', (req, res) => res.json(CATALOG));
 const rooms = {}; // roomId -> RoomState
 const players = {}; // socketId -> { id, roomId, x, y, angle, vehicleId, nickname }
 
+// Sala Solo (Mock para modo offline)
+const soloRoom = createRoomState('solo_room', true, 'SOLO');
+soloRoom.farm.money = 15000; // Saldo inicial maior para testes solo
+
 function generateRoomCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
@@ -128,7 +132,7 @@ function createRoomState(roomId, isPrivate, code) {
     weather: '☀️ Ensolarado',
     economy: { pricePerCrop: 10, totalMarketDemand: 50 },
     farm: {
-      money: 999999, // Dinheiro compartilhado
+      money: 1000, // Dinheiro compartilhado
       seedDepot: 0,
       harvestedCrops: 0,
       harvesterStorage: 0,
@@ -139,7 +143,9 @@ function createRoomState(roomId, isPrivate, code) {
       plantedCrops: [],
       unlockedLands: ['field_1']
     },
-    playerInventories: {}, // playerId -> { vehicles: [], implements: [], hasCellphone: false }
+    playerInventories: {
+      'server': { vehicles: ['veh_1', 'veh_2', 'veh_3'], implements: ['imp_1', 'imp_2', 'imp_3'], hasCellphone: true }
+    },
     vehicles: {
       'veh_1': { id: 'veh_1', modelId: 'tractor_mf275', ownerId: 'server', driverId: null, passengers: [], fuel: 50, attachedImplementId: null, x: 4480, y: 5696, rotation: 0, velocity: 0, engineOn: false, 
         upgrades: { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: false, hasMonitor: false },
@@ -162,6 +168,204 @@ function createRoomState(roomId, isPrivate, code) {
     counters: { vehicle: 10, implement: 10 }
   };
 }
+
+// ============================================================
+//  REST ENDPOINTS (SOLO MODE)
+// ============================================================
+
+app.get('/state', (req, res) => {
+  res.json({
+    ...soloRoom,
+    farm: {
+      ...soloRoom.farm,
+      harvesterCapacity: getHarvesterCapacity(soloRoom),
+      truckCapacity: getTruckCapacity(soloRoom),
+      seederCapacity: getSeederCapacity(soloRoom),
+      inventory: soloRoom.playerInventories['server'],
+      hasCellphone: soloRoom.playerInventories['server'].hasCellphone
+    }
+  });
+});
+
+app.post('/workshop/upgrade', (req, res) => {
+  const { vehicleId, category, type } = req.body;
+  const veh = soloRoom.vehicles[vehicleId];
+  if (!veh) return res.status(404).json({ success: false, error: 'Veículo não encontrado' });
+
+  let cost = 0;
+  let updateFn = null;
+
+  if (category === 'motor') {
+    if (type === 1) { cost = 500; updateFn = () => veh.upgrades.engineLevel = 1; }
+    else if (type === 2) { cost = 2000; updateFn = () => veh.upgrades.engineLevel = 2; }
+    else if (type === 3) { cost = 5000; updateFn = () => veh.upgrades.engineLevel = 3; }
+  } else if (category === 'turbo') {
+    const current = veh.upgrades.turboLevel || 0;
+    const is6G = (CATALOG.vehicles[veh.modelId]?.gears === 6);
+    const targetLevel = (is6G && current === 0) ? 2 : (current + 1);
+    if (targetLevel > 2) return res.json({ success: false, error: 'Turbo máximo atingido' });
+    cost = targetLevel === 1 ? 3500 : 2000;
+    updateFn = () => veh.upgrades.turboLevel = targetLevel;
+  } else if (category === 'tires') {
+    cost = 1200; updateFn = () => veh.upgrades.tireType = type;
+  } else if (category === 'systems') {
+    if (type === 'autodrive') { cost = 2500; updateFn = () => veh.upgrades.hasAutoDrive = true; }
+    else if (type === 'monitor') { cost = 1500; updateFn = () => veh.upgrades.hasMonitor = true; }
+    else if (type === 'autotrans') { cost = 3000; updateFn = () => veh.upgrades.hasAutoTrans = true; }
+  }
+
+  if (cost > 0 && soloRoom.farm.money >= cost) {
+    soloRoom.farm.money -= cost;
+    updateFn();
+    res.json({ success: true });
+  } else {
+    res.json({ success: false, error: 'Saldo insuficiente' });
+  }
+});
+
+app.post('/workshop/repair', (req, res) => {
+  const { vehicleId } = req.body;
+  const veh = soloRoom.vehicles[vehicleId];
+  if (!veh) return res.status(404).json({ success: false, error: 'Veículo não encontrado' });
+
+  const damage = (1.0 - veh.condition.engine) + (1.0 - veh.condition.tires);
+  const cost = Math.floor(damage * 100 * 50);
+
+  if (soloRoom.farm.money >= cost) {
+    soloRoom.farm.money -= cost;
+    veh.condition.engine = 1.0;
+    veh.condition.tires = 1.0;
+    res.json({ success: true });
+  } else {
+    res.json({ success: false, error: 'Saldo insuficiente' });
+  }
+});
+
+app.post('/shop/buy', (req, res) => {
+  const { category, itemId } = req.body;
+  const inv = soloRoom.playerInventories['server'];
+
+  if (category === 'vehicles') {
+    const it = CATALOG.vehicles[itemId];
+    if (soloRoom.farm.money >= it.price) {
+      soloRoom.farm.money -= it.price;
+      const id = `veh_${soloRoom.counters.vehicle++}`;
+      soloRoom.vehicles[id] = {
+        id, modelId: itemId, ownerId: 'server', driverId: null, passengers: [], fuel: it.fuelCapacity || 100, attachedImplementId: null, x: 4480, y: 5696, rotation: 0, velocity: 0, engineOn: false,
+        upgrades: { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: it.autoDrive || false, hasMonitor: (it.gears === 6) },
+        condition: { engine: 1.0, tires: 1.0 }
+      };
+      inv.vehicles.push(id);
+      return res.json({ success: true });
+    }
+  } else if (category === 'implements') {
+    const it = CATALOG.implements[itemId];
+    if (soloRoom.farm.money >= it.price) {
+      soloRoom.farm.money -= it.price;
+      const id = `imp_${soloRoom.counters.implement++}`;
+      soloRoom.implements[id] = { id, modelId: itemId, ownerId: 'server', seedStorage: 0, attachedToVehicleId: null };
+      inv.implements.push(id);
+      return res.json({ success: true });
+    }
+  } else if (category === 'seeds') {
+    const it = CATALOG.seeds[itemId];
+    if (soloRoom.farm.money >= it.price) {
+      soloRoom.farm.money -= it.price;
+      soloRoom.farm.seedDepot += it.amount;
+      return res.json({ success: true });
+    }
+  } else if (category === 'items') {
+    const it = CATALOG.items[itemId];
+    if (soloRoom.farm.money >= it.price) {
+      soloRoom.farm.money -= it.price;
+      if (itemId === 'cellphone') inv.hasCellphone = true;
+      return res.json({ success: true });
+    }
+  }
+  res.json({ success: false, error: 'Erro na compra' });
+});
+
+app.post('/shop/sell', (req, res) => {
+  const { category, itemId } = req.body;
+  const inv = soloRoom.playerInventories['server'];
+  if (category === 'vehicles') {
+    const idx = inv.vehicles.indexOf(itemId);
+    if (idx !== -1) {
+      const model = CATALOG.vehicles[soloRoom.vehicles[itemId].modelId];
+      inv.vehicles.splice(idx, 1);
+      delete soloRoom.vehicles[itemId];
+      soloRoom.farm.money += Math.floor(model.price * 0.8);
+      return res.json({ success: true });
+    }
+  } else if (category === 'implements') {
+    const idx = inv.implements.indexOf(itemId);
+    if (idx !== -1) {
+      const model = CATALOG.implements[soloRoom.implements[itemId].modelId];
+      inv.implements.splice(idx, 1);
+      delete soloRoom.implements[itemId];
+      soloRoom.farm.money += Math.floor(model.price * 0.8);
+      return res.json({ success: true });
+    }
+  }
+  res.json({ success: false, error: 'Erro na venda' });
+});
+
+app.post('/shop/sell-crops', (req, res) => {
+  const profit = soloRoom.farm.harvestedCrops * soloRoom.economy.pricePerCrop;
+  soloRoom.farm.money += profit;
+  soloRoom.farm.harvestedCrops = 0;
+  res.json({ success: true, profit });
+});
+
+app.post('/tick', (req, res) => {
+  soloRoom.time++;
+  res.json({ success: true, time: soloRoom.time });
+});
+
+app.post('/action/unload', (req, res) => {
+  soloRoom.farm.harvestedCrops += soloRoom.farm.harvesterStorage;
+  soloRoom.farm.harvesterStorage = 0;
+  res.json({ success: true });
+});
+
+app.post('/action/truck/load-silo', (req, res) => {
+  const space = getTruckCapacity(soloRoom) - (soloRoom.farm.truckStorage || 0);
+  if (space <= 0 || (soloRoom.farm.truckCargoType && soloRoom.farm.truckCargoType !== 'crops')) {
+    return res.json({ success: false });
+  }
+  const n = Math.min(soloRoom.farm.harvestedCrops, space);
+  soloRoom.farm.harvestedCrops -= n;
+  soloRoom.farm.truckStorage += n;
+  if (n > 0) soloRoom.farm.truckCargoType = 'crops';
+  res.json({ success: true });
+});
+
+app.post('/action/truck/load-harvester', (req, res) => {
+  const space = getTruckCapacity(soloRoom) - (soloRoom.farm.truckStorage || 0);
+  if (space <= 0 || soloRoom.farm.harvesterStorage <= 0) return res.json({ success: false });
+  if (soloRoom.farm.truckCargoType && soloRoom.farm.truckCargoType !== 'crops') return res.json({ success: false });
+  const n = Math.min(1, soloRoom.farm.harvesterStorage, space);
+  soloRoom.farm.harvesterStorage -= n;
+  soloRoom.farm.truckStorage += n;
+  soloRoom.farm.truckCargoType = 'crops';
+  res.json({ success: true, transferred: n });
+});
+
+app.post('/action/truck/load-depot', (req, res) => {
+  const n = Math.min(soloRoom.farm.seedDepot, 50); // Simplificado
+  soloRoom.farm.seedDepot -= n;
+  soloRoom.farm.truckStorage += n;
+  if (n > 0) soloRoom.farm.truckCargoType = 'seeds';
+  res.json({ success: true });
+});
+
+app.post('/action/truck/sell', (req, res) => {
+  const profit = soloRoom.farm.truckStorage * soloRoom.economy.pricePerCrop;
+  soloRoom.farm.money += profit;
+  soloRoom.farm.truckStorage = 0;
+  soloRoom.farm.truckCargoType = null;
+  res.json({ success: true });
+});
 
 io.on('connection', (socket) => {
   console.log("Cliente conectado:", socket.id);
@@ -262,7 +466,12 @@ io.on('connection', (socket) => {
   function getClientRoomState(room) {
     return {
       time: room.time, weather: room.weather, economy: room.economy,
-      farm: room.farm,
+      farm: {
+        ...room.farm,
+        harvesterCapacity: getHarvesterCapacity(room),
+        truckCapacity: getTruckCapacity(room),
+        seederCapacity: getSeederCapacity(room)
+      },
       playerInventories: room.playerInventories,
       vehicles: room.vehicles,
       implements: room.implements
@@ -609,7 +818,7 @@ io.on('connection', (socket) => {
     } else if (category === 'turbo') {
       const current = veh.upgrades.turboLevel || 0;
       if (current >= 2) return ack?.({ success: false, error: 'Já possui o turbo máximo' });
-      const is6G = (catalog.vehicles[veh.modelId]?.gears === 6);
+      const is6G = (CATALOG.vehicles[veh.modelId]?.gears === 6);
       const targetLevel = (is6G && current === 0) ? 2 : (current + 1);
       
       cost = targetLevel === 1 ? 3500 : 2000;
@@ -619,8 +828,6 @@ io.on('connection', (socket) => {
       cost = 1200; updateFn = () => veh.upgrades.tireType = type;
     } else if (category === 'systems') {
       if (type === 'autodrive') {
-        const model = catalog.vehicles[veh.modelId];
-        if (model && model.type === 'truck') return ack?.({ success: false, error: 'Caminhões não suportam AutoDrive' });
         if (veh.upgrades.hasAutoDrive) return ack?.({ success: false, error: 'Já possui' });
         cost = 2500; updateFn = () => veh.upgrades.hasAutoDrive = true;
       } else if (type === 'monitor') {
@@ -763,6 +970,46 @@ io.on('connection', (socket) => {
     room.farm.truckStorage += n;
     room.farm.truckCargoType = 'crops';
     broadcastRoomState(player.roomId);
+  });
+
+  socket.on('actionHarvesterToTruck', ({ truckId, harvesterId, amount }, ack) => {
+    const player = players[socket.id];
+    if (!player || !player.roomId) return ack?.({ success: false, error: 'Sem sala' });
+    const room = rooms[player.roomId];
+    const truck = room.vehicles[truckId];
+    const harvester = room.vehicles[harvesterId];
+    const truckModel = truck ? CATALOG.vehicles[truck.modelId] : null;
+    const harvesterModel = harvester ? CATALOG.vehicles[harvester.modelId] : null;
+
+    if (!truck || !harvester || truckModel?.type !== 'truck' || harvesterModel?.type !== 'harvester') {
+      return ack?.({ success: false, error: 'Equipamento invalido' });
+    }
+    if (truck.driverId && truck.driverId !== socket.id) {
+      return ack?.({ success: false, error: 'Apenas o motorista pode carregar' });
+    }
+    if (!harvester.engineOn || !harvester.toolOn) {
+      return ack?.({ success: false, error: 'Colheitadeira inativa' });
+    }
+
+    const dist = Math.hypot((truck.x || 0) - (harvester.x || 0), (truck.y || 0) - (harvester.y || 0));
+    if (dist >= 100) return ack?.({ success: false, error: 'Aproxime o caminhao da colheitadeira' });
+    if (room.farm.harvesterStorage <= 0) return ack?.({ success: false, error: 'Colheitadeira vazia' });
+    if (room.farm.truckCargoType && room.farm.truckCargoType !== 'crops') {
+      return ack?.({ success: false, error: 'Caminhao carregado com sementes' });
+    }
+
+    const capacity = truckModel.capacity || getTruckCapacity(room);
+    const space = capacity - (room.farm.truckStorage || 0);
+    if (space <= 0) return ack?.({ success: false, error: 'Caminhao cheio' });
+
+    const requested = Math.max(1, Math.min(3, Number(amount) || 1));
+    const n = Math.min(requested, room.farm.harvesterStorage, space);
+    room.farm.harvesterStorage -= n;
+    room.farm.truckStorage = (room.farm.truckStorage || 0) + n;
+    room.farm.truckCargoType = 'crops';
+
+    broadcastRoomState(player.roomId);
+    ack?.({ success: true, transferred: n });
   });
 
   socket.on('actionTruckLoadDepot', () => {

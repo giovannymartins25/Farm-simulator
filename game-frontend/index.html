@@ -46,10 +46,7 @@
             <div class="hud-line">Dinheiro <span id="ui-money">0</span> | Mercado $<span id="ui-price">0</span>/und |
                 Clima <span id="ui-weather">N/A</span></div>
             <div class="hud-line">Casa <span id="ui-depot">0</span> | Silo <span id="ui-silo">0</span></div>
-            <div class="hud-line">Plantadeira <span id="ui-seeder">0/20</span> | Colheitadeira <span
-                    id="ui-harvester">0/50</span></div>
-            <div class="hud-line">Caminhao <span id="ui-truck">0/30</span> | Dia <span id="ui-time">0</span> | <span
-                    id="ui-hour">00</span>h</div>
+            <div class="hud-line">Dia <span id="ui-time">0</span> | <span id="ui-hour">00</span>h</div>
             <div class="hud-line" id="ui-gear"></div>
             <div class="hud-line" id="ui-status"></div>
             <div class="hud-line" id="ui-room-code"
@@ -58,8 +55,19 @@
         </div>
 
         <div id="hud-toast" aria-live="polite"></div>
+        <div id="interaction-hint" aria-live="polite">Aperte Q para interagir</div>
 
         <div id="dashboard">
+            <div id="implement-capacity" class="implement-capacity" style="display: none;">
+                <div class="implement-capacity-head">
+                    <span id="implement-capacity-name">Implemento</span>
+                    <span id="implement-capacity-values"></span>
+                </div>
+                <div class="implement-capacity-track">
+                    <div id="implement-capacity-fill"></div>
+                </div>
+            </div>
+
             <div class="dash-main-cluster">
                 <div id="dash-turbo-container" style="display: none;">
                     <div class="dash-turbo-gauge-wrapper">
