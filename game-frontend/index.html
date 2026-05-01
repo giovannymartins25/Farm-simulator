@@ -72,9 +72,11 @@
                 <div id="dash-turbo-container" style="display: none;">
                     <div class="dash-turbo-gauge-wrapper">
                         <svg viewBox="0 0 100 100" class="dash-turbo-svg">
-                            <circle cx="50" cy="50" r="42" stroke="rgba(255,255,255,0.1)" stroke-width="6" fill="none" />
-                            <circle id="dash-turbo-path" cx="50" cy="50" r="42" stroke="#38bdf8" stroke-width="8" fill="none" 
-                                stroke-dasharray="263.8" stroke-dashoffset="263.8" transform="rotate(-90 50 50)" />
+                            <circle cx="50" cy="50" r="42" stroke="rgba(255,255,255,0.1)" stroke-width="6"
+                                fill="none" />
+                            <circle id="dash-turbo-path" cx="50" cy="50" r="42" stroke="#38bdf8" stroke-width="8"
+                                fill="none" stroke-dasharray="263.8" stroke-dashoffset="263.8"
+                                transform="rotate(-90 50 50)" />
                         </svg>
                         <div class="dash-turbo-text">
                             <div id="dash-turbo-val">0.0</div>
@@ -352,22 +354,28 @@
 
         <!-- MODAL DA OFICINA -->
         <div id="workshop-modal" class="game-modal" style="display: none;">
-            <div class="modal-inner" style="width: 700px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-color: #f59e0b;">
+            <div class="modal-inner"
+                style="width: 700px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-color: #f59e0b;">
                 <div class="modal-header" style="border-bottom-color: rgba(245, 158, 11, 0.3);">
                     <h2 style="color: #f59e0b;">🛠️ Oficina de Veículos</h2>
-                    <button class="modal-close" onclick="closeWorkshop()" style="border-color: #f59e0b; color: #f59e0b;">X</button>
+                    <button class="modal-close" onclick="closeWorkshop()"
+                        style="border-color: #f59e0b; color: #f59e0b;">X</button>
                 </div>
                 <div class="modal-content" style="display: flex; gap: 20px; padding: 25px;">
                     <!-- Lado Esquerdo: Info Veículo -->
-                    <div style="flex: 1; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.1);">
+                    <div
+                        style="flex: 1; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.1);">
                         <h3 id="ws-veh-name" style="color: #fff; margin-bottom: 15px; font-size: 20px;">Veículo</h3>
-                        <div id="ws-veh-stats" style="font-size: 13px; color: #94a3b8; display: flex; flex-direction: column; gap: 8px;">
+                        <div id="ws-veh-stats"
+                            style="font-size: 13px; color: #94a3b8; display: flex; flex-direction: column; gap: 8px;">
                             <!-- Preenchido via JS -->
                         </div>
                         <div style="margin-top: 25px;">
                             <div style="font-size: 11px; color: #f59e0b; margin-bottom: 5px;">ESTADO GERAL</div>
                             <div class="dash-rpm-container" style="height: 8px; background: rgba(255,255,255,0.05);">
-                                <div id="ws-cond-bar" style="height: 100%; width: 100%; background: #2ecc71; transition: width 0.3s ease;"></div>
+                                <div id="ws-cond-bar"
+                                    style="height: 100%; width: 100%; background: #2ecc71; transition: width 0.3s ease;">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -379,12 +387,16 @@
                             <button class="shop-tab" onclick="switchWorkshopTab('pneus')">Pneus</button>
                             <button class="shop-tab" onclick="switchWorkshopTab('sistemas')">Sistemas</button>
                         </div>
-                        <div id="workshop-upgrade-list" style="max-height: 350px; overflow-y: auto; padding-right: 10px;">
+                        <div id="workshop-upgrade-list"
+                            style="max-height: 350px; overflow-y: auto; padding-right: 10px;">
                             <!-- Preenchido via JS -->
                         </div>
-                        <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
-                            <div style="font-weight: bold; color: #fff;">Seu Saldo: <span style="color: #2ecc71;">$<span id="ws-money">0</span></span></div>
-                            <button id="ws-repair-btn" onclick="repairVehicle()" class="buy-btn" style="background: #e67e22; width: auto; padding: 10px 20px;">
+                        <div
+                            style="margin-top: auto; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-weight: bold; color: #fff;">Seu Saldo: <span style="color: #2ecc71;">$<span
+                                        id="ws-money">0</span></span></div>
+                            <button id="ws-repair-btn" onclick="repairVehicle()" class="buy-btn"
+                                style="background: #e67e22; width: auto; padding: 10px 20px;">
                                 🛠️ Reparar Tudo
                             </button>
                         </div>
@@ -452,7 +464,8 @@
     <script src="main.js"></script>
 
     <!-- NOVO: Modal de Atualização (Patch Notes) -->
-    <div id="update-modal" class="modal-overlay" style="display: none; z-index: 10000; backdrop-filter: blur(8px); background: rgba(0, 0, 0, 0.7); justify-content: center; align-items: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%;">
+    <div id="update-modal" class="modal-overlay"
+        style="display: none; z-index: 10000; backdrop-filter: blur(8px); background: rgba(0, 0, 0, 0.7); justify-content: center; align-items: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%;">
         <div class="update-card">
             <div class="update-header">
                 <div class="update-version">V 1.2</div>
@@ -461,11 +474,21 @@
             <div class="update-body">
                 <p class="update-subtitle">Veja o que há de novo nesta versão:</p>
                 <ul class="update-list">
-                    <li><span class="icon">🚗</span> <div><b>Física Realista:</b> Aceleração suave e inércia de carga.</div></li>
-                    <li><span class="icon">🐌</span> <div><b>Sistema de Turbo:</b> Estágios 0.5 e 1.0 BAR com HUD dinâmico.</div></li>
-                    <li><span class="icon">🛠️</span> <div><b>Oficina Completa:</b> Upgrades de motor, pneus e sistemas.</div></li>
-                    <li><span class="icon">🤖</span> <div><b>AutoDrive Pro:</b> Melhorias na navegação e trabalho autônomo.</div></li>
-                    <li><span class="icon">🐛</span> <div><b>Estabilidade:</b> Correção de bugs na loja e sincronia.</div></li>
+                    <li><span class="icon">🚗</span>
+                        <div><b>Física Realista:</b> Aceleração suave e inércia de carga.</div>
+                    </li>
+                    <li><span class="icon">🐌</span>
+                        <div><b>Sistema de Turbo:</b> Estágios 0.5 e 1.0 BAR com HUD dinâmico.</div>
+                    </li>
+                    <li><span class="icon">🛠️</span>
+                        <div><b>Oficina Completa:</b> Upgrades de motor, pneus e sistemas.</div>
+                    </li>
+                    <li><span class="icon">🤖</span>
+                        <div><b>AutoDrive Pro:</b> Melhorias na navegação e trabalho autônomo.</div>
+                    </li>
+                    <li><span class="icon">🐛</span>
+                        <div><b>Estabilidade:</b> Correção de bugs na loja e sincronia.</div>
+                    </li>
                 </ul>
             </div>
             <div class="update-footer">
