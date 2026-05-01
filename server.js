@@ -1064,6 +1064,33 @@ io.on('connection', (socket) => {
     broadcastRoomState(player.roomId);
   });
 
+  socket.on('actionImplementTransferSeeds', ({ sourceId, targetId }) => {
+    const player = players[socket.id];
+    if (!player || !player.roomId) return;
+    const room = rooms[player.roomId];
+    
+    const sourceImp = room.implements[sourceId];
+    const targetImp = room.implements[targetId];
+    if (!sourceImp || !targetImp) return;
+    
+    sourceImp.seedStorage = sourceImp.seedStorage || 0;
+    targetImp.seedStorage = targetImp.seedStorage || 0;
+    if (sourceImp.seedStorage <= 0) return;
+    
+    const targetModel = CATALOG.implements[targetImp.modelId];
+    const targetCapacity = targetModel?.capacity || 20;
+    const space = targetCapacity - targetImp.seedStorage;
+    if (space <= 0) return;
+    
+    const n = Math.min(sourceImp.seedStorage, space);
+    sourceImp.seedStorage -= n;
+    targetImp.seedStorage += n;
+    
+    socket.emit('implementStorageUpdated', { id: sourceImp.id, seedStorage: sourceImp.seedStorage });
+    socket.emit('implementStorageUpdated', { id: targetImp.id, seedStorage: targetImp.seedStorage });
+    broadcastRoomState(player.roomId);
+  });
+
   socket.on('chatMessage', (data) => {
     const player = players[socket.id];
     if (player && player.roomId) {
