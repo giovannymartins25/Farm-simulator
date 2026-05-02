@@ -132,7 +132,7 @@ function createRoomState(roomId, isPrivate, code) {
     weather: '☀️ Ensolarado',
     economy: { pricePerCrop: 10, totalMarketDemand: 50 },
     farm: {
-      money: 1000, // Dinheiro compartilhado
+      money: 99999999, // Dinheiro compartilhado
       seedDepot: 0,
       harvestedCrops: 0,
       harvesterStorage: 0,
@@ -147,15 +147,18 @@ function createRoomState(roomId, isPrivate, code) {
       'server': { vehicles: ['veh_1', 'veh_2', 'veh_3'], implements: ['imp_1', 'imp_2', 'imp_3'], hasCellphone: true }
     },
     vehicles: {
-      'veh_1': { id: 'veh_1', modelId: 'tractor_mf275', ownerId: 'server', driverId: null, passengers: [], fuel: 50, attachedImplementId: null, x: 4480, y: 5696, rotation: 0, velocity: 0, engineOn: false, 
+      'veh_1': {
+        id: 'veh_1', modelId: 'tractor_mf275', ownerId: 'server', driverId: null, passengers: [], fuel: 50, attachedImplementId: null, x: 4480, y: 5696, rotation: 0, velocity: 0, engineOn: false,
         upgrades: { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: false, hasMonitor: false },
         condition: { engine: 1.0, tires: 1.0 }
       },
-      'veh_2': { id: 'veh_2', modelId: 'harvester_mf5650', ownerId: 'server', driverId: null, passengers: [], fuel: 100, attachedImplementId: null, x: 4544, y: 5696, rotation: 0, velocity: 0, engineOn: false,
+      'veh_2': {
+        id: 'veh_2', modelId: 'harvester_mf5650', ownerId: 'server', driverId: null, passengers: [], fuel: 100, attachedImplementId: null, x: 4544, y: 5696, rotation: 0, velocity: 0, engineOn: false,
         upgrades: { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: false, hasMonitor: false },
         condition: { engine: 1.0, tires: 1.0 }
       },
-      'veh_3': { id: 'veh_3', modelId: 'truck_vw', ownerId: 'server', driverId: null, passengers: [], fuel: 150, attachedImplementId: null, x: 4608, y: 5696, rotation: 0, velocity: 0, engineOn: false,
+      'veh_3': {
+        id: 'veh_3', modelId: 'truck_vw', ownerId: 'server', driverId: null, passengers: [], fuel: 150, attachedImplementId: null, x: 4608, y: 5696, rotation: 0, velocity: 0, engineOn: false,
         upgrades: { engineLevel: 1, turboLevel: 0, tireType: 'standard', hasAutoDrive: false, hasMonitor: false },
         condition: { engine: 1.0, tires: 1.0 }
       }
@@ -432,7 +435,7 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     players[socket.id].roomId = roomId;
     room.players.push(socket.id);
-    
+
     // Inicializar inventário se não existir
     if (!room.playerInventories[socket.id]) {
       room.playerInventories[socket.id] = { vehicles: [], implements: [], hasCellphone: false };
@@ -506,12 +509,12 @@ io.on('connection', (socket) => {
 
     // Remover de outro veiculo antes
     if (player.vehicleId && player.vehicleId !== data.vehicleId) {
-       const oldVeh = room.vehicles[player.vehicleId];
-       if (oldVeh) {
-          if (oldVeh.driverId === socket.id) oldVeh.driverId = oldVeh.passengers.length ? oldVeh.passengers.shift() : null;
-          else oldVeh.passengers = oldVeh.passengers.filter(p => p !== socket.id);
-          io.to(player.roomId).emit('vehicleOccupantsUpdated', { vehicleId: oldVeh.id, driverId: oldVeh.driverId, passengers: oldVeh.passengers });
-       }
+      const oldVeh = room.vehicles[player.vehicleId];
+      if (oldVeh) {
+        if (oldVeh.driverId === socket.id) oldVeh.driverId = oldVeh.passengers.length ? oldVeh.passengers.shift() : null;
+        else oldVeh.passengers = oldVeh.passengers.filter(p => p !== socket.id);
+        io.to(player.roomId).emit('vehicleOccupantsUpdated', { vehicleId: oldVeh.id, driverId: oldVeh.driverId, passengers: oldVeh.passengers });
+      }
     }
 
     if (!veh.driverId) {
@@ -519,12 +522,12 @@ io.on('connection', (socket) => {
     } else if (veh.driverId !== socket.id && !veh.passengers.includes(socket.id)) {
       veh.passengers.push(socket.id);
     }
-    
+
     player.vehicleId = data.vehicleId;
     console.log('[ENTER VEHICLE]', socket.id, '->', data.vehicleId, 'as', veh.driverId === socket.id ? 'DRIVER' : 'PASSENGER');
     // Broadcast occupants + notify others to hide player sprite
-    io.to(player.roomId).emit('vehicleOccupantsUpdated', { 
-      vehicleId: veh.id, driverId: veh.driverId, passengers: veh.passengers 
+    io.to(player.roomId).emit('vehicleOccupantsUpdated', {
+      vehicleId: veh.id, driverId: veh.driverId, passengers: veh.passengers
     });
     socket.to(player.roomId).emit('playerEnteredVehicle', { playerId: socket.id, vehicleId: veh.id });
   });
@@ -541,13 +544,13 @@ io.on('connection', (socket) => {
     } else {
       veh.passengers = veh.passengers.filter(p => p !== socket.id);
     }
-    
+
     player.vehicleId = null;
     console.log('[EXIT VEHICLE]', socket.id, 'from', veh.id, 'newDriver:', veh.driverId);
     // Notify all to show the player sprite again
     io.to(player.roomId).emit('vehicleOccupantsUpdated', { vehicleId: veh.id, driverId: veh.driverId, passengers: veh.passengers });
-    socket.to(player.roomId).emit('playerExitedVehicle', { 
-      playerId: socket.id, x: player.x, y: player.y 
+    socket.to(player.roomId).emit('playerExitedVehicle', {
+      playerId: socket.id, x: player.x, y: player.y
     });
   });
 
@@ -556,7 +559,7 @@ io.on('connection', (socket) => {
     if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
     const veh = room.vehicles[vehData.id];
-    
+
     // Only the driver can push vehicle state
     if (veh && veh.driverId === socket.id) {
       veh.x = vehData.x;
@@ -592,7 +595,7 @@ io.on('connection', (socket) => {
     const room = rooms[player.roomId];
     const veh = room.vehicles[data.vehicleId];
     const imp = room.implements[data.implementId];
-    
+
     if (veh && imp && veh.driverId === socket.id) {
       // Clear previous attachment on the implement if any
       if (imp.attachedToVehicleId && imp.attachedToVehicleId !== veh.id) {
@@ -621,7 +624,7 @@ io.on('connection', (socket) => {
     if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
     const veh = room.vehicles[data.vehicleId];
-    
+
     if (veh && veh.driverId === socket.id && veh.attachedImplementId) {
       const imp = room.implements[veh.attachedImplementId];
       const oldImpId = veh.attachedImplementId;
@@ -656,17 +659,17 @@ io.on('connection', (socket) => {
     const room = rooms[player.roomId];
     const veh = room.vehicles[vehicleId];
     if (!veh) return;
-    
+
     const model = CATALOG.vehicles[veh.modelId];
     if (!model) return;
-    
+
     const maxFuel = model.fuelCapacity || 100;
     const missingFuel = Math.max(0, maxFuel - (veh.fuel || 0));
     const cost = Math.floor(missingFuel * 2);
-    
+
     if (missingFuel <= 0) return socket.emit('error', 'Tanque já está cheio!');
     if (room.farm.money < cost) return socket.emit('error', 'Sem dinheiro!');
-    
+
     room.farm.money -= cost;
     veh.fuel = maxFuel;
     broadcastRoomState(player.roomId);
@@ -675,47 +678,47 @@ io.on('connection', (socket) => {
 
   socket.on('shopBuy', ({ category, itemId }, ack) => {
     const player = players[socket.id];
-    if (!player || !player.roomId) { if(ack) ack({success: false, error: 'Sem sala'}); return; }
+    if (!player || !player.roomId) { if (ack) ack({ success: false, error: 'Sem sala' }); return; }
     const room = rooms[player.roomId];
     const inv = room.playerInventories[socket.id];
-    
+
     if (category === 'vehicles') {
       const it = CATALOG.vehicles[itemId];
-      if (!it || room.farm.money < it.price) { if(ack) ack({success: false, error: 'Saldo insuficiente'}); return; }
+      if (!it || room.farm.money < it.price) { if (ack) ack({ success: false, error: 'Saldo insuficiente' }); return; }
       room.farm.money -= it.price;
       const id = `veh_${room.counters.vehicle++}`;
-      room.vehicles[id] = { 
+      room.vehicles[id] = {
         id, modelId: itemId, ownerId: socket.id, driverId: null, passengers: [], fuel: it.fuelCapacity || 100, attachedImplementId: null, x: player.x, y: player.y, rotation: 0, velocity: 0, engineOn: false,
-        upgrades: { 
-          engineLevel: 1, 
-          turboLevel: (itemId.includes('jd') || itemId.includes('case')) ? 1 : 0, 
-          tireType: 'standard', 
-          hasAutoDrive: it.autoDrive || false, 
-          hasMonitor: (it.gears === 6) 
+        upgrades: {
+          engineLevel: 1,
+          turboLevel: (itemId.includes('jd') || itemId.includes('case')) ? 1 : 0,
+          tireType: 'standard',
+          hasAutoDrive: it.autoDrive || false,
+          hasMonitor: (it.gears === 6)
         },
         condition: { engine: 1.0, tires: 1.0 }
       };
       inv.vehicles.push(id);
     } else if (category === 'implements') {
       const it = CATALOG.implements[itemId];
-      if (!it || room.farm.money < it.price) { if(ack) ack({success: false, error: 'Saldo insuficiente'}); return; }
+      if (!it || room.farm.money < it.price) { if (ack) ack({ success: false, error: 'Saldo insuficiente' }); return; }
       room.farm.money -= it.price;
       const id = `imp_${room.counters.implement++}`;
       room.implements[id] = { id, modelId: itemId, ownerId: socket.id, seedStorage: 0, attachedToVehicleId: null };
       inv.implements.push(id);
     } else if (category === 'seeds') {
       const it = CATALOG.seeds[itemId];
-      if (!it || room.farm.money < it.price) { if(ack) ack({success: false, error: 'Saldo insuficiente'}); return; }
+      if (!it || room.farm.money < it.price) { if (ack) ack({ success: false, error: 'Saldo insuficiente' }); return; }
       room.farm.money -= it.price;
       room.farm.seedDepot += it.amount;
     } else if (category === 'lands') {
       const it = CATALOG.lands[itemId];
-      if (!it || room.farm.money < it.price || room.farm.unlockedLands.includes(itemId)) { if(ack) ack({success: false, error: 'Saldo insuficiente ou já possui'}); return; }
+      if (!it || room.farm.money < it.price || room.farm.unlockedLands.includes(itemId)) { if (ack) ack({ success: false, error: 'Saldo insuficiente ou já possui' }); return; }
       room.farm.money -= it.price;
       room.farm.unlockedLands.push(itemId);
     } else if (category === 'items') {
       const it = CATALOG.items[itemId];
-      if (!it || room.farm.money < it.price || inv.hasCellphone) { if(ack) ack({success: false, error: 'Saldo insuficiente ou já possui'}); return; }
+      if (!it || room.farm.money < it.price || inv.hasCellphone) { if (ack) ack({ success: false, error: 'Saldo insuficiente ou já possui' }); return; }
       room.farm.money -= it.price;
       if (itemId === 'cellphone') inv.hasCellphone = true;
     }
@@ -725,38 +728,38 @@ io.on('connection', (socket) => {
 
   socket.on('shopSell', ({ category, itemId }, ack) => {
     const player = players[socket.id];
-    if (!player || !player.roomId) { if(ack) ack({success: false, error: 'Sem sala'}); return; }
+    if (!player || !player.roomId) { if (ack) ack({ success: false, error: 'Sem sala' }); return; }
     const room = rooms[player.roomId];
     const inv = room.playerInventories[socket.id];
-    
+
     if (category === 'vehicles') {
       const idx = inv.vehicles.indexOf(itemId);
-      if (idx === -1) { if(ack) ack({success: false, error: 'Não possui'}); return; }
+      if (idx === -1) { if (ack) ack({ success: false, error: 'Não possui' }); return; }
       const veh = room.vehicles[itemId];
-      if (!veh) { if(ack) ack({success: false, error: 'Não existe'}); return; }
-      
+      if (!veh) { if (ack) ack({ success: false, error: 'Não existe' }); return; }
+
       if (veh.driverId || veh.passengers.length > 0) {
         socket.emit('error', 'Veículo em uso');
-        if(ack) ack({success: false, error: 'Veículo em uso'});
+        if (ack) ack({ success: false, error: 'Veículo em uso' });
         return;
       }
-      
+
       const model = CATALOG.vehicles[veh.modelId];
       inv.vehicles.splice(idx, 1);
       delete room.vehicles[itemId];
       room.farm.money += Math.floor(model.price * 0.8);
     } else if (category === 'implements') {
       const idx = inv.implements.indexOf(itemId);
-      if (idx === -1) { if(ack) ack({success: false, error: 'Não possui'}); return; }
+      if (idx === -1) { if (ack) ack({ success: false, error: 'Não possui' }); return; }
       const imp = room.implements[itemId];
-      if (!imp) { if(ack) ack({success: false, error: 'Não existe'}); return; }
-      
+      if (!imp) { if (ack) ack({ success: false, error: 'Não existe' }); return; }
+
       if (imp.attachedToVehicleId) {
         socket.emit('error', 'Implemento engatado');
-        if(ack) ack({success: false, error: 'Implemento engatado'});
+        if (ack) ack({ success: false, error: 'Implemento engatado' });
         return;
       }
-      
+
       const model = CATALOG.implements[imp.modelId];
       inv.implements.splice(idx, 1);
       delete room.implements[itemId];
@@ -764,15 +767,15 @@ io.on('connection', (socket) => {
     } else if (category === 'lands') {
       if (itemId === 'field_1') {
         socket.emit('error', 'Nao e possivel vender o campo principal');
-        if(ack) ack({success: false, error: 'Nao e possivel vender o campo principal'});
+        if (ack) ack({ success: false, error: 'Nao e possivel vender o campo principal' });
         return;
       }
       const idx = room.farm.unlockedLands.indexOf(itemId);
-      if (idx === -1) { if(ack) ack({success: false, error: 'Não possui'}); return; }
-      
+      if (idx === -1) { if (ack) ack({ success: false, error: 'Não possui' }); return; }
+
       const model = CATALOG.lands[itemId];
-      if (!model) { if(ack) ack({success: false, error: 'Não existe'}); return; }
-      
+      if (!model) { if (ack) ack({ success: false, error: 'Não existe' }); return; }
+
       room.farm.unlockedLands.splice(idx, 1);
       room.farm.money += Math.floor(model.price * 0.8);
     }
@@ -780,21 +783,21 @@ io.on('connection', (socket) => {
     if (ack) ack({ success: true });
   });
 
-  socket.on('shopSellCrops', ({}, ack) => {
+  socket.on('shopSellCrops', ({ }, ack) => {
     const player = players[socket.id];
-    if (!player || !player.roomId) { if(ack) ack({success: false, error: 'Sem sala'}); return; }
+    if (!player || !player.roomId) { if (ack) ack({ success: false, error: 'Sem sala' }); return; }
     const room = rooms[player.roomId];
-    
+
     if (room.farm.harvestedCrops <= 0) {
-      if(ack) ack({success: false, error: 'Silo vazio'});
+      if (ack) ack({ success: false, error: 'Silo vazio' });
       return;
     }
-    
+
     const amount = room.farm.harvestedCrops;
     const profit = amount * room.economy.pricePerCrop;
     room.farm.money += profit;
     room.farm.harvestedCrops = 0;
-    
+
     broadcastRoomState(player.roomId);
     if (ack) ack({ success: true, profit });
   });
@@ -820,7 +823,7 @@ io.on('connection', (socket) => {
       if (current >= 2) return ack?.({ success: false, error: 'Já possui o turbo máximo' });
       const is6G = (CATALOG.vehicles[veh.modelId]?.gears === 6);
       const targetLevel = (is6G && current === 0) ? 2 : (current + 1);
-      
+
       cost = targetLevel === 1 ? 3500 : 2000;
       updateFn = () => veh.upgrades.turboLevel = targetLevel;
     } else if (category === 'tires') {
@@ -905,19 +908,19 @@ io.on('connection', (socket) => {
     if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
     if (!isInAnyField(room, x, y)) return;
-    
+
     const imp = room.implements[implementId];
     if (!imp || imp.seedStorage <= 0) return;
-    
+
     const key = `${x},${y}`;
     if (getSoilState(room, key) !== 'harrowed') return;
     if (room.weather === '🔥 Seca') return;
-    
+
     imp.seedStorage -= 1;
     const dir = getSoilDir(room, key);
     room.farm.soil[key] = { state: 'planted', dir };
     room.farm.plantedCrops.push(new Crop(x, y, room.time));
-    
+
     io.to(player.roomId).emit('soilUpdated', { key, state: 'planted', dir });
     io.to(player.roomId).emit('cropPlanted', { x, y, time: room.time });
     socket.emit('implementStorageUpdated', { id: imp.id, seedStorage: imp.seedStorage });
@@ -927,17 +930,17 @@ io.on('connection', (socket) => {
     const player = players[socket.id];
     if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
-    
+
     if (room.farm.harvesterStorage >= getHarvesterCapacity(room)) return;
     const ci = room.farm.plantedCrops.findIndex(c => c.x === x && c.y === y);
     if (ci === -1) return;
-    
+
     const crop = room.farm.plantedCrops[ci];
     if ((crop.isReady && !crop.isDead) || crop.isDead) {
       if (crop.isReady && !crop.isDead) room.farm.harvesterStorage += 1;
       room.farm.plantedCrops.splice(ci, 1);
       room.farm.soil[`${x},${y}`] = { state: 'normal', dir: null };
-      
+
       io.to(player.roomId).emit('cropHarvested', { x, y });
       broadcastRoomState(player.roomId);
     }
@@ -961,10 +964,10 @@ io.on('connection', (socket) => {
     const room = rooms[player.roomId];
     if (room.farm.harvestedCrops <= 0) return;
     if (room.farm.truckCargoType && room.farm.truckCargoType !== 'crops') return;
-    
+
     const space = getTruckCapacity(room) - room.farm.truckStorage;
     if (space <= 0) return;
-    
+
     const n = Math.min(room.farm.harvestedCrops, space);
     room.farm.harvestedCrops -= n;
     room.farm.truckStorage += n;
@@ -1018,10 +1021,10 @@ io.on('connection', (socket) => {
     const room = rooms[player.roomId];
     if (room.farm.seedDepot <= 0) return;
     if (room.farm.truckCargoType && room.farm.truckCargoType !== 'seeds') return;
-    
+
     const space = getTruckCapacity(room) - room.farm.truckStorage;
     if (space <= 0) return;
-    
+
     const n = Math.min(room.farm.seedDepot, space);
     room.farm.seedDepot -= n;
     room.farm.truckStorage += n;
@@ -1034,7 +1037,7 @@ io.on('connection', (socket) => {
     if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
     if (room.farm.truckCargoType !== 'crops' || room.farm.truckStorage <= 0) return;
-    
+
     const profit = room.farm.truckStorage * room.economy.pricePerCrop;
     room.farm.money += profit;
     room.farm.truckStorage = 0;
@@ -1047,19 +1050,19 @@ io.on('connection', (socket) => {
     if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
     if (room.farm.truckCargoType !== 'seeds' || room.farm.truckStorage <= 0) return;
-    
+
     const imp = room.implements[implementId];
     if (!imp) return;
-    
+
     const model = CATALOG.implements[imp.modelId];
     const space = (model?.capacity || 20) - imp.seedStorage;
     if (space <= 0) return;
-    
+
     const n = Math.min(room.farm.truckStorage, space);
     room.farm.truckStorage -= n;
     imp.seedStorage += n;
     if (room.farm.truckStorage <= 0) room.farm.truckCargoType = null;
-    
+
     socket.emit('implementStorageUpdated', { id: imp.id, seedStorage: imp.seedStorage });
     broadcastRoomState(player.roomId);
   });
@@ -1068,24 +1071,24 @@ io.on('connection', (socket) => {
     const player = players[socket.id];
     if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
-    
+
     const sourceImp = room.implements[sourceId];
     const targetImp = room.implements[targetId];
     if (!sourceImp || !targetImp) return;
-    
+
     sourceImp.seedStorage = sourceImp.seedStorage || 0;
     targetImp.seedStorage = targetImp.seedStorage || 0;
     if (sourceImp.seedStorage <= 0) return;
-    
+
     const targetModel = CATALOG.implements[targetImp.modelId];
     const targetCapacity = targetModel?.capacity || 20;
     const space = targetCapacity - targetImp.seedStorage;
     if (space <= 0) return;
-    
+
     const n = Math.min(sourceImp.seedStorage, space);
     sourceImp.seedStorage -= n;
     targetImp.seedStorage += n;
-    
+
     socket.emit('implementStorageUpdated', { id: sourceImp.id, seedStorage: sourceImp.seedStorage });
     socket.emit('implementStorageUpdated', { id: targetImp.id, seedStorage: targetImp.seedStorage });
     broadcastRoomState(player.roomId);
@@ -1110,12 +1113,12 @@ io.on('connection', (socket) => {
       if (roomId && rooms[roomId]) {
         // Remover de veiculo se estiver em um
         if (player.vehicleId) {
-           const veh = rooms[roomId].vehicles[player.vehicleId];
-           if (veh) {
-              if (veh.driverId === socket.id) veh.driverId = veh.passengers.length ? veh.passengers.shift() : null;
-              else veh.passengers = veh.passengers.filter(p => p !== socket.id);
-              io.to(roomId).emit('vehicleOccupantsUpdated', { vehicleId: veh.id, driverId: veh.driverId, passengers: veh.passengers });
-           }
+          const veh = rooms[roomId].vehicles[player.vehicleId];
+          if (veh) {
+            if (veh.driverId === socket.id) veh.driverId = veh.passengers.length ? veh.passengers.shift() : null;
+            else veh.passengers = veh.passengers.filter(p => p !== socket.id);
+            io.to(roomId).emit('vehicleOccupantsUpdated', { vehicleId: veh.id, driverId: veh.driverId, passengers: veh.passengers });
+          }
         }
         rooms[roomId].players = rooms[roomId].players.filter(id => id !== socket.id);
         socket.to(roomId).emit('playerLeft', socket.id);
@@ -1135,7 +1138,7 @@ setInterval(() => {
 
     // Simular o que acontecia no runTick() original
     room.time++;
-    
+
     // Clima
     let nextWeather = room.weather;
     if (room.weather === '☀️ Ensolarado') {
