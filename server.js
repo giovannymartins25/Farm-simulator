@@ -3,6 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import Crop from './models/crop.js';
+import { updateVehiclePhysicsServer } from './serverPhysics.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -541,6 +542,10 @@ io.on('connection', (socket) => {
 
     if (veh.driverId === socket.id) {
       veh.driverId = veh.passengers.length ? veh.passengers.shift() : null;
+      // Se não houver novo motorista, reseta os inputs para ele não continuar acelerando sozinho
+      if (!veh.driverId) {
+        veh.inputs = { up: false, down: false, left: false, right: false, shift: false, space: false };
+      }
     } else {
       veh.passengers = veh.passengers.filter(p => p !== socket.id);
     }
@@ -554,38 +559,45 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('playerInput', (inputs) => {
+    const player = players[socket.id];
+    if (!player || !player.roomId || !player.vehicleId) return;
+    const room = rooms[player.roomId];
+    const veh = room.vehicles[player.vehicleId];
+    if (veh && veh.driverId === socket.id) {
+      veh.inputs = inputs;
+      // Aceita mudanças manuais de marcha/caixa vindas do cliente
+      if (inputs.gear !== undefined && typeof inputs.gear === 'number') veh.gear = inputs.gear;
+      if (inputs.gearbox) veh.gearbox = inputs.gearbox;
+      if (inputs.autoShift !== undefined) veh.autoShift = inputs.autoShift;
+
+      // [Loose Server Authority] Aceita a predição do cliente para suavidade perfeita, 
+      // mas aplica Sanity Checks para evitar cheaters de teleporte.
+      if (inputs.x !== undefined && inputs.y !== undefined) {
+        const dist = Math.hypot((veh.x || inputs.x) - inputs.x, (veh.y || inputs.y) - inputs.y);
+        // Se a divergência for menor que 150px (simulando latência altíssima de até 400ms), aceitamos
+        // Se for maior que isso, o servidor rejeita e o loop de serverPhysics vai forçar o cliente pro lugar.
+        if (dist < 150) {
+            veh.x = inputs.x;
+            veh.y = inputs.y;
+            veh.rotation = inputs.rotation !== undefined ? inputs.rotation : veh.rotation;
+            veh.velocity = inputs.velocity !== undefined ? inputs.velocity : veh.velocity;
+        }
+      }
+    }
+  });
+
   socket.on('vehicleUpdate', (vehData) => {
+    // Mantido apenas para flags como toolOn, gear e engineOn até serem movidos
     const player = players[socket.id];
     if (!player || !player.roomId) return;
     const room = rooms[player.roomId];
     const veh = room.vehicles[vehData.id];
 
-    // Only the driver can push vehicle state
     if (veh && veh.driverId === socket.id) {
-      veh.x = vehData.x;
-      veh.y = vehData.y;
-      veh.rotation = vehData.angle;
-      veh.velocity = vehData.velocity;
       veh.engineOn = vehData.isOn;
       veh.gear = vehData.gear;
-      veh.rpm = vehData.rpm;
-      veh.fuel = vehData.fuel;
-      veh.toolOn = vehData.toolOn; // For harvesters
-
-      // Broadcast to ALL others (includes implement position via client reconstruct)
-      socket.to(player.roomId).emit('vehicleUpdated', {
-        id: veh.id,
-        x: veh.x,
-        y: veh.y,
-        angle: veh.rotation,
-        velocity: veh.velocity,
-        isOn: veh.engineOn,
-        gear: veh.gear,
-        rpm: veh.rpm,
-        fuel: veh.fuel,
-        toolOn: veh.toolOn,
-        attachedImplementId: veh.attachedImplementId
-      });
+      veh.toolOn = vehData.toolOn;
     }
   });
 
@@ -628,7 +640,10 @@ io.on('connection', (socket) => {
     if (veh && veh.driverId === socket.id && veh.attachedImplementId) {
       const imp = room.implements[veh.attachedImplementId];
       const oldImpId = veh.attachedImplementId;
-      if (imp) imp.attachedToVehicleId = null;
+      if (imp) {
+        imp.attachedToVehicleId = null;
+        imp.isOn = false;
+      }
       veh.attachedImplementId = null;
       console.log('[DETACH IMPLEMENT]', socket.id, 'veh:', veh.id, 'imp:', oldImpId);
       // Broadcast updated state
@@ -637,6 +652,31 @@ io.on('connection', (socket) => {
         id: veh.id, x: veh.x, y: veh.y, angle: veh.rotation,
         velocity: veh.velocity, isOn: veh.engineOn, attachedImplementId: null
       });
+    }
+  });
+
+  socket.on('toggleImplement', (data) => {
+    const player = players[socket.id];
+    if (!player || !player.roomId) return;
+    const room = rooms[player.roomId];
+    const veh = room.vehicles[data.vehicleId];
+    if (veh && veh.driverId === socket.id) {
+       if (data.implementId && room.implements[data.implementId]) {
+          room.implements[data.implementId].isOn = data.isOn;
+       } else if (veh.modelId.includes('harvester')) {
+          veh.toolOn = data.isOn;
+       }
+    }
+  });
+
+  socket.on('toggleEngine', (data) => {
+    const player = players[socket.id];
+    if (!player || !player.roomId) return;
+    const room = rooms[player.roomId];
+    const veh = room.vehicles[data.vehicleId];
+    if (veh && veh.driverId === socket.id) {
+       veh.engineOn = data.isOn;
+       if (!veh.engineOn) veh.velocity = 0;
     }
   });
 
@@ -688,7 +728,7 @@ io.on('connection', (socket) => {
       room.farm.money -= it.price;
       const id = `veh_${room.counters.vehicle++}`;
       room.vehicles[id] = {
-        id, modelId: itemId, ownerId: socket.id, driverId: null, passengers: [], fuel: it.fuelCapacity || 100, attachedImplementId: null, x: player.x, y: player.y, rotation: 0, velocity: 0, engineOn: false,
+        id, modelId: itemId, ownerId: socket.id, driverId: null, passengers: [], fuel: it.fuelCapacity || 100, attachedImplementId: null, x: player.x, y: player.y, rotation: 0, velocity: 0, engineOn: false, gear: 1, rpm: 0, gearbox: (it.gearType === 'auto' ? 'auto' : 'simples'), autoShift: (it.gearType === 'auto'),
         upgrades: {
           engineLevel: 1,
           turboLevel: (itemId.includes('jd') || itemId.includes('case')) ? 1 : 0,
@@ -802,12 +842,30 @@ io.on('connection', (socket) => {
     if (ack) ack({ success: true, profit });
   });
 
-  socket.on('workshopUpgrade', ({ vehicleId, category, type }, ack) => {
+  socket.on('workshopUpgrade', ({ vehicleId, category, type, level }, ack) => {
     const player = players[socket.id];
     if (!player || !player.roomId) return ack?.({ success: false, error: 'Sem sala' });
     const room = rooms[player.roomId];
     const veh = room.vehicles[vehicleId];
     if (!veh) return ack?.({ success: false, error: 'Veículo não encontrado' });
+
+    if (!veh.upgrades) {
+      veh.upgrades = { 
+        engineLevel: 1, 
+        turboLevel: (CATALOG.vehicles[veh.modelId]?.gears === 6) ? 1 : 0, 
+        activeTurboLevel: (CATALOG.vehicles[veh.modelId]?.gears === 6) ? 1 : 0,
+        tireType: 'standard', 
+        hasAutoDrive: CATALOG.vehicles[veh.modelId]?.autoDrive || false, 
+        hasAutoDriveEnabled: true,
+        hasMonitor: (CATALOG.vehicles[veh.modelId]?.gears === 6),
+        hasMonitorEnabled: true,
+        hasAutoTrans: (CATALOG.vehicles[veh.modelId]?.gearType === 'auto'),
+        autoTransEnabled: true
+      };
+    }
+    if (veh.upgrades.activeTurboLevel === undefined) veh.upgrades.activeTurboLevel = veh.upgrades.turboLevel || 0;
+    if (veh.upgrades.hasAutoDriveEnabled === undefined) veh.upgrades.hasAutoDriveEnabled = true;
+    if (veh.upgrades.hasMonitorEnabled === undefined) veh.upgrades.hasMonitorEnabled = true;
 
     let cost = 0;
     let updateFn = null;
@@ -819,26 +877,61 @@ io.on('connection', (socket) => {
       else if (type === 3) { cost = 5000; updateFn = () => veh.upgrades.engineLevel = 3; }
       else return ack?.({ success: false, error: 'Nível inválido' });
     } else if (category === 'turbo') {
+      if (type === 'toggle') {
+        const targetLvl = Number(level) || 0;
+        const maxOwned = veh.upgrades.turboLevel || 0;
+        if (targetLvl > maxOwned) return ack?.({ success: false, error: 'Nível não adquirido' });
+        veh.upgrades.activeTurboLevel = targetLvl;
+        broadcastRoomState(player.roomId);
+        return ack?.({ success: true, msg: targetLvl === 0 ? 'Turbo Desativado!' : `Turbo Stage ${targetLvl} Ativado!` });
+      }
       const current = veh.upgrades.turboLevel || 0;
       if (current >= 2) return ack?.({ success: false, error: 'Já possui o turbo máximo' });
       const is6G = (CATALOG.vehicles[veh.modelId]?.gears === 6);
       const targetLevel = (is6G && current === 0) ? 2 : (current + 1);
 
       cost = targetLevel === 1 ? 3500 : 2000;
-      updateFn = () => veh.upgrades.turboLevel = targetLevel;
+      updateFn = () => {
+        veh.upgrades.turboLevel = targetLevel;
+        veh.upgrades.activeTurboLevel = targetLevel;
+      };
     } else if (category === 'tires') {
       if (veh.upgrades.tireType === type) return ack?.({ success: false, error: 'Já possui este pneu' });
       cost = 1200; updateFn = () => veh.upgrades.tireType = type;
     } else if (category === 'systems') {
       if (type === 'autodrive') {
-        if (veh.upgrades.hasAutoDrive) return ack?.({ success: false, error: 'Já possui' });
-        cost = 2500; updateFn = () => veh.upgrades.hasAutoDrive = true;
+        if (veh.upgrades.hasAutoDrive) {
+           veh.upgrades.hasAutoDriveEnabled = !veh.upgrades.hasAutoDriveEnabled;
+           broadcastRoomState(player.roomId);
+           return ack?.({ success: true, msg: veh.upgrades.hasAutoDriveEnabled ? 'AutoDrive Ativado!' : 'AutoDrive Desativado!' });
+        }
+        cost = 2500; updateFn = () => { veh.upgrades.hasAutoDrive = true; veh.upgrades.hasAutoDriveEnabled = true; };
       } else if (type === 'monitor') {
-        if (veh.upgrades.hasMonitor) return ack?.({ success: false, error: 'Já possui' });
-        cost = 1500; updateFn = () => veh.upgrades.hasMonitor = true;
+        if (veh.upgrades.hasMonitor) {
+           veh.upgrades.hasMonitorEnabled = !veh.upgrades.hasMonitorEnabled;
+           broadcastRoomState(player.roomId);
+           return ack?.({ success: true, msg: veh.upgrades.hasMonitorEnabled ? 'Monitor Ativado!' : 'Monitor Desativado!' });
+        }
+        cost = 1500; updateFn = () => { veh.upgrades.hasMonitor = true; veh.upgrades.hasMonitorEnabled = true; };
       } else if (type === 'autotrans') {
-        if (veh.upgrades.hasAutoTrans) return ack?.({ success: false, error: 'Já possui' });
-        cost = 3000; updateFn = () => veh.upgrades.hasAutoTrans = true;
+        if (veh.upgrades.hasAutoTrans) {
+          veh.upgrades.autoTransEnabled = !veh.upgrades.autoTransEnabled;
+          if (veh.upgrades.autoTransEnabled) {
+            veh.autoShift = true;
+            veh.gearbox = 'auto';
+          } else {
+            veh.autoShift = false;
+            veh.gearbox = 'simples';
+          }
+          broadcastRoomState(player.roomId);
+          return ack?.({ success: true, msg: veh.upgrades.autoTransEnabled ? 'Transmissão Automática Ativada!' : 'Transmissão Manual Ativada!' });
+        }
+        cost = 3000; updateFn = () => {
+          veh.upgrades.hasAutoTrans = true;
+          veh.upgrades.autoTransEnabled = true;
+          veh.autoShift = true;
+          veh.gearbox = 'auto';
+        };
       }
     }
 
@@ -874,77 +967,8 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('actionPlow', ({ x, y }) => {
-    const player = players[socket.id];
-    if (!player || !player.roomId) return;
-    const room = rooms[player.roomId];
-    if (!isInAnyField(room, x, y)) {
-      socket.emit('toast', { msg: 'Fora do campo!', tone: 'warning' });
-      return;
-    }
-    const key = `${x},${y}`;
-    const cur = getSoilState(room, key);
-    if (cur === 'normal' || cur === 'harrowed') {
-      room.farm.soil[key] = { state: 'plowed', dir: null };
-      io.to(player.roomId).emit('soilUpdated', { key, state: 'plowed', dir: null });
-      console.log(`[ACTION] ${player.nickname} araou em ${key}`);
-    }
-  });
-
-  socket.on('actionHarrow', ({ x, y, dir }) => {
-    const player = players[socket.id];
-    if (!player || !player.roomId) return;
-    const room = rooms[player.roomId];
-    if (!isInAnyField(room, x, y)) return;
-    const key = `${x},${y}`;
-    if (getSoilState(room, key) === 'plowed') {
-      room.farm.soil[key] = { state: 'harrowed', dir: dir || 'h' };
-      io.to(player.roomId).emit('soilUpdated', { key, state: 'harrowed', dir: dir || 'h' });
-    }
-  });
-
-  socket.on('actionPlant', ({ x, y, implementId }) => {
-    const player = players[socket.id];
-    if (!player || !player.roomId) return;
-    const room = rooms[player.roomId];
-    if (!isInAnyField(room, x, y)) return;
-
-    const imp = room.implements[implementId];
-    if (!imp || imp.seedStorage <= 0) return;
-
-    const key = `${x},${y}`;
-    if (getSoilState(room, key) !== 'harrowed') return;
-    if (room.weather === '🔥 Seca') return;
-
-    imp.seedStorage -= 1;
-    const dir = getSoilDir(room, key);
-    room.farm.soil[key] = { state: 'planted', dir };
-    room.farm.plantedCrops.push(new Crop(x, y, room.time));
-
-    io.to(player.roomId).emit('soilUpdated', { key, state: 'planted', dir });
-    io.to(player.roomId).emit('cropPlanted', { x, y, time: room.time });
-    socket.emit('implementStorageUpdated', { id: imp.id, seedStorage: imp.seedStorage });
-  });
-
-  socket.on('actionHarvest', ({ x, y }) => {
-    const player = players[socket.id];
-    if (!player || !player.roomId) return;
-    const room = rooms[player.roomId];
-
-    if (room.farm.harvesterStorage >= getHarvesterCapacity(room)) return;
-    const ci = room.farm.plantedCrops.findIndex(c => c.x === x && c.y === y);
-    if (ci === -1) return;
-
-    const crop = room.farm.plantedCrops[ci];
-    if ((crop.isReady && !crop.isDead) || crop.isDead) {
-      if (crop.isReady && !crop.isDead) room.farm.harvesterStorage += 1;
-      room.farm.plantedCrops.splice(ci, 1);
-      room.farm.soil[`${x},${y}`] = { state: 'normal', dir: null };
-
-      io.to(player.roomId).emit('cropHarvested', { x, y });
-      broadcastRoomState(player.roomId);
-    }
-  });
+  // [Server-Authoritative] Ações de solo (plow, harrow, plant, harvest) foram movidas 
+  // para o motor de física (serverPhysics.js) e agora são processadas de forma autoritativa.
 
   // logistics
   socket.on('actionUnload', () => {
@@ -1115,8 +1139,16 @@ io.on('connection', (socket) => {
         if (player.vehicleId) {
           const veh = rooms[roomId].vehicles[player.vehicleId];
           if (veh) {
-            if (veh.driverId === socket.id) veh.driverId = veh.passengers.length ? veh.passengers.shift() : null;
-            else veh.passengers = veh.passengers.filter(p => p !== socket.id);
+            if (veh.driverId === socket.id) {
+              veh.driverId = veh.passengers.length ? veh.passengers.shift() : null;
+              veh.inputs = { up: false, down: false, left: false, right: false, shift: false, space: false };
+              if (!veh.driverId) {
+                 veh.engineOn = false;
+                 veh.velocity = 0;
+              }
+            } else {
+              veh.passengers = veh.passengers.filter(p => p !== socket.id);
+            }
             io.to(roomId).emit('vehicleOccupantsUpdated', { vehicleId: veh.id, driverId: veh.driverId, passengers: veh.passengers });
           }
         }
@@ -1171,5 +1203,51 @@ setInterval(() => {
     io.to(roomId).emit('tick', { time: room.time, weather: room.weather, crops: room.farm.plantedCrops });
   }
 }, 20000); // 20s = 1 in-game hour
+
+// Physics Loop Server-Side (20Hz = 50ms)
+setInterval(() => {
+  for (const roomId in rooms) {
+    const room = rooms[roomId];
+    if (room.players.length === 0) continue;
+
+    const snapshot = { vehicles: [], implements: [] };
+
+    for (const vid in room.vehicles) {
+      const veh = room.vehicles[vid];
+      if (veh.engineOn || Math.abs(veh.velocity || 0) > 0) {
+        updateVehiclePhysicsServer(veh, room, CATALOG, 50, io, roomId);
+      }
+      snapshot.vehicles.push({
+        id: veh.id,
+        x: veh.x,
+        y: veh.y,
+        rotation: veh.rotation,
+        velocity: veh.velocity,
+        rpm: veh.rpm,
+        fuel: veh.fuel,
+        engineOn: veh.engineOn,
+        gear: veh.gear,
+        toolOn: veh.toolOn,
+        gearbox: veh.gearbox,
+        autoShift: veh.autoShift,
+        attachedImplementId: veh.attachedImplementId
+      });
+    }
+
+    for (const iid in room.implements) {
+      const imp = room.implements[iid];
+      snapshot.implements.push({
+        id: imp.id,
+        x: imp.x,
+        y: imp.y,
+        rotation: imp.rotation,
+        isOn: imp.isOn,
+        attachedToVehicleId: imp.attachedToVehicleId
+      });
+    }
+
+    io.to(roomId).emit('roomStateTick', snapshot);
+  }
+}, 50);
 
 httpServer.listen(PORT, () => console.log(`Backend Multiplayer rodando na porta ${PORT}`));
